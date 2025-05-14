@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}模拟模板 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">模拟模板</h1>
+        <div>
+            <a href="{{ url_for('add_simulation_template') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> 添加模板
+            </a>
+            <a href="{{ url_for('topology_simulation') }}" class="btn btn-outline-secondary ms-2">
+                <i class="fas fa-arrow-left"></i> 返回模拟
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="fas fa-file-code me-1"></i>
+        模板列表
+    </div>
+    <div class="card-body">
+        {% if templates %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="templatesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>名称</th>
+                        <th>设备类型</th>
+                        <th>描述</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for template in templates %}
+                    <tr>
+                        <td>{{ template.id }}</td>
+                        <td>{{ template.name }}</td>
+                        <td>{{ template.device_type }}</td>
+                        <td>{{ template.description }}</td>
+                        <td>{{ template.created_at }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary viewTemplateBtn" data-id="{{ template.id }}">
+                                <i class="fas fa-eye"></i> 查看
+                            </button>
+                            <button class="btn btn-sm btn-info useTemplateBtn" data-id="{{ template.id }}">
+                                <i class="fas fa-play"></i> 使用
+                            </button>
+                            <button class="btn btn-sm btn-danger deleteTemplateBtn" data-id="{{ template.id }}">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> 暂无模拟模板，您可以点击"添加模板"按钮创建新模板。
+        </div>
+        {% endif %}
+    </div>
+</div>
+<!-- 模板内容查看模态框 -->
+<div class="modal fade" id="viewTemplateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">查看模板</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">模板名称</label>
+                    <input type="text" class="form-control" id="templateName" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">设备类型</label>
+                    <input type="text" class="form-control" id="templateDeviceType" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <textarea class="form-control" id="templateDescription" rows="2" readonly></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">模板内容</label>
+                    <pre class="form-control" id="templateContent" style="height: 300px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认模态框 -->
+<div class="modal fade" id="deleteTemplateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">删除确认</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除这个模板吗？此操作无法撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 初始化数据表格
+    if ($('#templatesTable').length > 0) {
+        $('#templatesTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.11.5/i18n/zh.json"
+            }
+        });
+    }
+    
+    // 查看模板内容
+    $('.viewTemplateBtn').click(function() {
+        const templateId = $(this).data('id');
+        
+        // 请求模板详细信息
+        $.ajax({
+            url: `/api/topology/simulation/templates/${templateId}`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    $('#templateName').val(response.template.name);
+                    $('#templateDeviceType').val(response.template.device_type);
+                    $('#templateDescription').val(response.template.description);
+                    $('#templateContent').text(response.template.template_content);
+                    
+                    $('#viewTemplateModal').modal('show');
+                } else {
+                    alert('获取模板信息失败：' + response.error);
+                }
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+            }
+        });
+    });
+    
+    // 使用模板
+    $('.useTemplateBtn').click(function() {
+        const templateId = $(this).data('id');
+        window.location.href = `/topology/simulation?template_id=${templateId}`;
+    });
+    
+    // 删除模板
+    $('.deleteTemplateBtn').click(function() {
+        const templateId = $(this).data('id');
+        $('#confirmDeleteBtn').data('id', templateId);
+        $('#deleteTemplateModal').modal('show');
+    });
+    
+    $('#confirmDeleteBtn').click(function() {
+        const templateId = $(this).data('id');
+        
+        $.ajax({
+            url: `/api/topology/simulation/templates/${templateId}`,
+            method: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    alert('模板已成功删除');
+                    location.reload();
+                } else {
+                    alert('删除模板失败：' + response.error);
+                }
+                $('#deleteTemplateModal').modal('hide');
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+                $('#deleteTemplateModal').modal('hide');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,442 @@
+{% extends 'base.html' %}
+
+{% block title %}DHCP配置 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">DHCP配置</h1>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            配置将提交给管理员审核后执行，请填写准确的信息
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-network-wired me-1"></i>
+                DHCP服务器配置
+            </div>
+            <div class="card-body">
+                <form id="dhcpForm">
+                    <div class="mb-3">
+                        <label for="deviceSelect" class="form-label">选择设备</label>
+                        <select class="form-select" id="deviceSelect" name="device_ids" multiple required>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}">{{ device.name }} ({{ device.ip }}) - {{ device.type }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">按住Ctrl键可多选</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="poolName" class="form-label">DHCP池名称</label>
+                        <input type="text" class="form-control" id="poolName" name="pool_name" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="network" class="form-label">网络地址</label>
+                            <input type="text" class="form-control" id="network" name="network" placeholder="例如: 192.168.1.0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="mask" class="form-label">子网掩码</label>
+                            <input type="text" class="form-control" id="mask" name="mask" placeholder="例如: 255.255.255.0" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="gateway" class="form-label">默认网关</label>
+                        <input type="text" class="form-control" id="gateway" name="gateway" placeholder="例如: 192.168.1.1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dns" class="form-label">DNS服务器</label>
+                        <input type="text" class="form-control" id="dns" name="dns" placeholder="例如: 8.8.8.8, 8.8.4.4">
+                        <div class="form-text">多个DNS服务器用逗号分隔</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="domain" class="form-label">域名</label>
+                        <input type="text" class="form-control" id="domain" name="domain" placeholder="例如: example.com">
+                    </div>
+                    <div class="mb-3">
+                        <label for="leaseDays" class="form-label">租约时间（天）</label>
+                        <input type="number" class="form-control" id="leaseDays" name="lease_days" value="1" min="1" max="365">
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" id="previewBtn" class="btn btn-secondary me-md-2">预览配置</button>
+                        <button type="submit" class="btn btn-primary">提交配置请求</button>
+                        <button type="button" id="checkStatusBtn" class="btn btn-info">查看任务状态</button>
+                    </div>
+                </form>
+
+                <div id="resultArea" class="mt-4" style="display: none;">
+                    <h5>配置结果：</h5>
+                    <div id="resultContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="previewModalLabel">配置预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="previewContent" class="bg-light p-3"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 任务状态模态框 -->
+<div class="modal fade" id="taskStatusModal" tabindex="-1" aria-labelledby="taskStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskStatusModalLabel">任务状态</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-primary" role="alert" id="taskMessage">
+                    正在检查任务状态...
+                </div>
+                <div class="card">
+                    <div class="card-header">任务详情</div>
+                    <div class="card-body">
+                        <p><strong>任务ID:</strong> <span id="taskId">-</span></p>
+                        <p><strong>状态:</strong> <span id="taskStatus">-</span></p>
+                        <p><strong>创建时间:</strong> <span id="taskCreatedAt">-</span></p>
+                        <p><strong>完成时间:</strong> <span id="taskCompletedAt">-</span></p>
+                        <p><strong>结果:</strong> <span id="taskResult">-</span></p>
+                        <p><strong>错误信息:</strong> <span id="taskError">-</span></p>
+                    </div>
+                </div>
+
+                <!-- 任务历史记录 -->
+                <div class="card mt-3">
+                    <div class="card-header">历史任务</div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="taskHistoryTable">
+                                <thead>
+                                    <tr>
+                                        <th>任务ID</th>
+                                        <th>池名称</th>
+                                        <th>时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- 任务历史记录将通过JS动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="refreshTaskStatus">刷新状态</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 检查并打印设备数据，用于调试
+        console.log("可选设备数量:", $('#deviceSelect option').length);
+        
+        // 预览配置
+        $('#previewBtn').click(function() {
+            const poolName = $('#poolName').val();
+            const network = $('#network').val();
+            const mask = $('#mask').val();
+            const gateway = $('#gateway').val();
+            const dns = $('#dns').val();
+            const domain = $('#domain').val();
+            const leaseDays = $('#leaseDays').val();
+
+            if (!poolName || !network || !mask || !gateway) {
+                alert('请填写必填字段');
+                return;
+            }
+
+            let previewText = `! DHCP配置命令预览\n`;
+            previewText += `ip dhcp excluded-address ${gateway}\n`;
+            previewText += `ip dhcp pool ${poolName}\n`;
+            previewText += ` network ${network} ${mask}\n`;
+            previewText += ` default-router ${gateway}\n`;
+
+            if (dns) {
+                const dnsList = dns.split(',').map(d => d.trim());
+                previewText += ` dns-server ${dnsList.join(' ')}\n`;
+            }
+
+            if (domain) {
+                previewText += ` domain-name ${domain}\n`;
+            }
+
+            previewText += ` lease ${leaseDays}\n`;
+
+            $('#previewContent').text(previewText);
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            previewModal.show();
+        });
+
+        // 查看任务状态按钮
+        $('#checkStatusBtn').click(function() {
+            showTaskStatusModal();
+        });
+
+        // 提交表单
+        $('#dhcpForm').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            const deviceIds = $('#deviceSelect').val();
+
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+
+            // 显示加载状态
+            $('#resultArea').hide();
+            $('#resultContent').html('<div class="alert alert-info">正在提交配置请求，请稍候...</div>');
+            $('#resultArea').show();
+
+            // 收集表单数据
+            const formData = {
+                device_ids: deviceIds,
+                pool_name: $('#poolName').val(),
+                network: $('#network').val(),
+                mask: $('#mask').val(),
+                gateway: $('#gateway').val(),
+                dns: $('#dns').val(),
+                domain: $('#domain').val(),
+                lease_days: parseInt($('#leaseDays').val())
+            };
+
+            // 发送AJAX请求
+            $.ajax({
+                url: '/dhcp/submit',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function(response) {
+                    // 显示成功消息
+                    let resultHtml = `
+                        <div class="alert alert-success">
+                            <h5>配置请求已提交</h5>
+                            <p>您的DHCP配置请求已成功提交，等待管理员审核。</p>
+                            <p><strong>任务ID:</strong> ${response.task_id}</p>
+                            <p><strong>状态:</strong> ${response.status}</p>
+                            <p><strong>消息:</strong> ${response.message}</p>
+                            <button class="btn btn-info btn-sm" onclick="checkTaskStatus('${response.task_id}')">
+                                检查任务状态
+                            </button>
+                        </div>
+                    `;
+                    $('#resultContent').html(resultHtml);
+
+                    // 保存任务ID到本地存储
+                    let taskHistory = JSON.parse(localStorage.getItem('dhcpTaskHistory') || '[]');
+                    taskHistory.unshift({
+                        id: response.task_id,
+                        pool: $('#poolName').val(),
+                        time: new Date().toISOString()
+                    });
+                    // 只保留最近20条记录
+                    if (taskHistory.length > 20) {
+                        taskHistory = taskHistory.slice(0, 20);
+                    }
+                    localStorage.setItem('dhcpTaskHistory', JSON.stringify(taskHistory));
+                },
+                error: function(xhr, status, error) {
+                    // 显示错误消息
+                    let errorMessage = '提交配置请求失败';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.error) {
+                            errorMessage = response.error;
+                        }
+                    } catch (e) {
+                        // 解析错误，使用默认错误消息
+                    }
+
+                    $('#resultContent').html(`
+                        <div class="alert alert-danger">
+                            <h5>错误</h5>
+                            <p>${errorMessage}</p>
+                        </div>
+                    `);
+                }
+            });
+        });
+
+        // 初始化任务状态查询
+        window.checkTaskStatus = function(taskId) {
+            // 显示模态框
+            const taskStatusModal = new bootstrap.Modal(document.getElementById('taskStatusModal'));
+            taskStatusModal.show();
+
+            // 清空之前的数据
+            $('#taskId').text('-');
+            $('#taskStatus').text('-');
+            $('#taskCreatedAt').text('-');
+            $('#taskCompletedAt').text('-');
+            $('#taskResult').text('-');
+            $('#taskError').text('-');
+            $('#taskMessage').text('正在检查任务状态...');
+            $('#taskMessage').removeClass().addClass('alert alert-primary');
+
+            // 发送请求查询任务状态
+            $.ajax({
+                url: `/dhcp/status/${taskId}`,
+                type: 'GET',
+                success: function(response) {
+                    // 显示任务详情
+                    $('#taskId').text(response.task_id);
+                    $('#taskStatus').text(response.status_text);
+                    $('#taskCreatedAt').text(response.created_at || '-');
+                    $('#taskCompletedAt').text(response.completed_at || '-');
+                    
+                    if (response.result) {
+                        $('#taskResult').text(typeof response.result === 'object' ? 
+                            JSON.stringify(response.result, null, 2) : response.result);
+                    }
+                    
+                    if (response.error) {
+                        $('#taskError').text(response.error);
+                    }
+
+                    // 更新状态消息
+                    let messageClass = 'alert alert-info';
+                    let message = '';
+                    
+                    switch(response.status) {
+                        case 'pending_approval':
+                            message = '任务正在等待管理员审核。';
+                            messageClass = 'alert alert-info';
+                            break;
+                        case 'approved':
+                            message = '任务已通过审核，等待执行。';
+                            messageClass = 'alert alert-success';
+                            break;
+                        case 'rejected':
+                            message = '任务已被拒绝。';
+                            messageClass = 'alert alert-danger';
+                            break;
+                        case 'running':
+                            message = '任务正在执行中。';
+                            messageClass = 'alert alert-primary';
+                            break;
+                        case 'completed':
+                            message = '任务已成功完成。';
+                            messageClass = 'alert alert-success';
+                            break;
+                        case 'failed':
+                            message = '任务执行失败。';
+                            messageClass = 'alert alert-danger';
+                            break;
+                        default:
+                            message = `任务状态: ${response.status}`;
+                            break;
+                    }
+                    
+                    $('#taskMessage').text(message);
+                    $('#taskMessage').removeClass().addClass(messageClass);
+                },
+                error: function(xhr, status, error) {
+                    // 显示错误消息
+                    let errorMessage = '无法获取任务状态';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.error) {
+                            errorMessage = response.error;
+                        }
+                    } catch (e) {
+                        // 解析错误，使用默认错误消息
+                    }
+                    
+                    $('#taskMessage').text(errorMessage);
+                    $('#taskMessage').removeClass().addClass('alert alert-danger');
+                }
+            });
+        };
+
+        // 显示任务状态模态框和历史记录
+        function showTaskStatusModal() {
+            // 显示模态框
+            const taskStatusModal = new bootstrap.Modal(document.getElementById('taskStatusModal'));
+            taskStatusModal.show();
+            
+            // 清空之前的数据
+            $('#taskId').text('-');
+            $('#taskStatus').text('-');
+            $('#taskCreatedAt').text('-');
+            $('#taskCompletedAt').text('-');
+            $('#taskResult').text('-');
+            $('#taskError').text('-');
+            $('#taskMessage').text('请选择一条历史记录查看详情');
+            $('#taskMessage').removeClass().addClass('alert alert-info');
+            
+            // 加载历史记录
+            let taskHistory = JSON.parse(localStorage.getItem('dhcpTaskHistory') || '[]');
+            let tableHtml = '';
+            
+            if (taskHistory.length === 0) {
+                tableHtml = '<tr><td colspan="4" class="text-center">暂无任务历史记录</td></tr>';
+            } else {
+                taskHistory.forEach(function(task) {
+                    const date = new Date(task.time);
+                    const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    
+                    tableHtml += `
+                        <tr>
+                            <td>${task.id}</td>
+                            <td>${task.pool}</td>
+                            <td>${formattedDate}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary check-task-btn" data-task-id="${task.id}">
+                                    查看
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            $('#taskHistoryTable tbody').html(tableHtml);
+            
+            // 绑定查看任务按钮事件
+            $('.check-task-btn').click(function() {
+                const taskId = $(this).data('task-id');
+                checkTaskStatus(taskId);
+            });
+        }
+        
+        // 刷新任务状态按钮
+        $('#refreshTaskStatus').click(function() {
+            const taskId = $('#taskId').text();
+            if (taskId && taskId !== '-') {
+                checkTaskStatus(taskId);
+            } else {
+                $('#taskMessage').text('请先选择一条任务记录');
+                $('#taskMessage').removeClass().addClass('alert alert-warning');
+            }
+        });
+    });
+</script>
+{% endblock %}

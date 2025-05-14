@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}任务日志 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">任务日志</h1>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-filter me-1"></i>
+                筛选选项
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('task_logs') }}" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="typeFilter" class="form-label">任务类型</label>
+                        <select class="form-select" id="typeFilter" name="type">
+                            <option value="">全部</option>
+                            {% for task_type in task_types %}
+                            <option value="{{ task_type[0] }}" {% if current_type == task_type[0] %}selected{% endif %}>{{ task_type[0] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="statusFilter" class="form-label">状态</label>
+                        <select class="form-select" id="statusFilter" name="status">
+                            <option value="">全部</option>
+                            {% for status in statuses %}
+                            <option value="{{ status[0] }}" {% if current_status == status[0] %}selected{% endif %}>{{ status[0] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="deviceFilter" class="form-label">设备</label>
+                        <select class="form-select" id="deviceFilter" name="device_id">
+                            <option value="">全部</option>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}" {% if current_device_id == device.id|string %}selected{% endif %}>{{ device.hostname }} ({{ device.ip_address }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">应用筛选</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-clipboard-list me-1"></i>
+                任务日志列表
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>任务类型</th>
+                                <th>设备</th>
+                                <th>状态</th>
+                                <th>消息</th>
+                                <th>创建时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs_pagination.items %}
+                            <tr>
+                                <td>{{ log.id }}</td>
+                                <td>{{ log.task_type }}</td>
+                                <td>
+                                    {% for device in devices %}
+                                        {% if device.id == log.device_id %}
+                                            {{ device.hostname }} ({{ device.ip_address }})
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% if log.status == 'success' %}
+                                    <span class="badge bg-success">成功</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">失败</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.message }}</td>
+                                <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                {% if logs_pagination.pages > 1 %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mt-4">
+                        <li class="page-item {% if logs_pagination.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('task_logs', page=logs_pagination.prev_num, type=current_type, status=current_status, device_id=current_device_id) }}">上一页</a>
+                        </li>
+                        
+                        {% for page_num in logs_pagination.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if logs_pagination.page == page_num %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('task_logs', page=page_num, type=current_type, status=current_status, device_id=current_device_id) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <li class="page-item {% if logs_pagination.page == logs_pagination.pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('task_logs', page=logs_pagination.next_num, type=current_type, status=current_status, device_id=current_device_id) }}">下一页</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 自动提交表单的处理可以放在这里
+    });
+</script>
+{% endblock %}

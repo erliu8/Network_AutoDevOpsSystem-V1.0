@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}添加设备 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">添加新设备</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-plus-circle me-1"></i>
+                设备信息
+            </div>
+            <div class="card-body">
+                {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                <form method="post" action="{{ url_for('add_device') }}">
+                    <div class="mb-3">
+                        <label for="hostname" class="form-label">设备名称</label>
+                        <input type="text" class="form-control" id="hostname" name="hostname" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ip_address" class="form-label">IP地址</label>
+                        <input type="text" class="form-control" id="ip_address" name="ip_address" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="device_type" class="form-label">设备类型</label>
+                        <select class="form-select" id="device_type" name="device_type" required>
+                            <option value="cisco_ios">Cisco IOS</option>
+                            <option value="cisco_nxos">Cisco NXOS</option>
+                            <option value="cisco_asa">Cisco ASA</option>
+                            <option value="huawei">华为</option>
+                            <option value="h3c">H3C</option>
+                            <option value="ruijie">锐捷</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="network_layer" class="form-label">网络层级</label>
+                        <select class="form-select" id="network_layer" name="network_layer" required>
+                            <option value="core">核心层</option>
+                            <option value="distribution">汇聚层</option>
+                            <option value="access">接入层</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">密码</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="enable_password" class="form-label">特权密码</label>
+                        <input type="password" class="form-control" id="enable_password" name="enable_password">
+                        <div class="form-text">如不需要，可留空</div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('device_list') }}" class="btn btn-secondary me-md-2">取消</a>
+                        <button type="submit" class="btn btn-primary">添加设备</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

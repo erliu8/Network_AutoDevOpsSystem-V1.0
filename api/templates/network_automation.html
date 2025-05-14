@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}网络自动化配置{% endblock %}
+
+{% block styles %}
+<style>
+.feature-card {
+    transition: transform 0.3s;
+}
+.feature-card:hover {
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-magic me-2"></i>网络自动化配置
+            </h1>
+            <p class="lead text-muted">
+                通过自动化功能简化网络配置，提高运维效率
+            </p>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        {% for feature in automation_features %}
+        <div class="col-md-3">
+            <div class="card feature-card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas {{ feature.icon }} me-2"></i>{{ feature.name }}
+                    </h5>
+                    <p class="card-text text-muted">{{ feature.description }}</p>
+                    
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <a href="{{ url_for(feature.route) }}" class="btn btn-primary btn-sm">
+                            进入配置 <i class="fas fa-arrow-right ms-1"></i>
+                        </a>
+                        
+                        {% if feature.templates %}
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                模板
+                            </button>
+                            <ul class="dropdown-menu">
+                                {% for template in feature.templates %}
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('add_config_template', template_id=template.id) }}">
+                                        {{ template.name }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>自动化配置说明
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <strong>VLAN配置</strong>：支持批量VLAN创建、接口分配和VLAN间路由
+                        </li>
+                        <li class="list-group-item">
+                            <strong>DHCP配置</strong>：自动创建DHCP地址池，支持多网段和复杂网络环境
+                        </li>
+                        <li class="list-group-item">
+                            <strong>路由配置</strong>：自动配置动态路由协议，简化网络路由管理
+                        </li>
+                        <li class="list-group-item">
+                            <strong>ACL配置</strong>：自动生成和应用访问控制列表，提高网络安全性
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 可以添加一些交互特效
+});
+</script>
+{% endblock %}

@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}添加模拟模板 - 校园网络自动化运维系统{% endblock %}
+
+{% block styles %}
+<style>
+    .CodeMirror {
+        height: 350px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .template-preview {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        height: 350px;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+    }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.3/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.3/theme/eclipse.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">添加模拟模板</h1>
+        <div>
+            <a href="{{ url_for('simulation_templates') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> 返回模板列表
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    <i class="fas fa-exclamation-circle"></i> {{ error }}
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('add_simulation_template') }}">
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-file-code me-1"></i>
+            模板基本信息
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">模板名称</label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               placeholder="输入模板名称" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="device_type" class="form-label">设备类型</label>
+                        <select class="form-select" id="device_type" name="device_type">
+                            <option value="generic">通用</option>
+                            <option value="huawei_ar">华为路由器 (AR系列)</option>
+                            <option value="huawei_s">华为交换机 (S系列)</option>
+                            <option value="cisco_ios">思科 IOS</option>
+                            <option value="h3c">H3C</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">模板描述</label>
+                        <textarea class="form-control" id="description" name="description" 
+                                  rows="4" placeholder="输入模板描述..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-code me-1"></i>
+            配置模板内容
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                您可以在配置中使用变量，例如: ${HOSTNAME}, ${IP_ADDRESS}, ${DEVICE_TYPE}, ${DEVICE_ID}
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label for="template_content" class="form-label">配置模板</label>
+                        <textarea class="form-control" id="template_content" name="template_content" 
+                                  rows="15" placeholder="输入设备配置模板..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-project-diagram me-1"></i>
+            拓扑数据
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                此处可以定义模板的默认拓扑结构。如果留空，系统将自动生成拓扑。
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label for="topology_data" class="form-label">拓扑JSON数据 (可选)</label>
+                        <textarea class="form-control" id="topology_data" name="topology_data" 
+                                  rows="10" placeholder='{"devices": [{"name": "Device1", "type": "AR", "x": 100, "y": 100}], "connections": []}'>
+{
+  "devices": [
+    {"name": "Core1", "type": "AR", "x": 100, "y": 100},
+    {"name": "Access1", "type": "S", "x": 300, "y": 100}
+  ],
+  "connections": [
+    {"source": 0, "target": 1, "source_interface": "GigabitEthernet0/0/1", "target_interface": "GigabitEthernet0/0/1"}
+  ]
+}
+                        </textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12 text-end">
+            <button type="reset" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-undo"></i> 重置
+            </button>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> 保存模板
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.3/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.3/mode/properties/properties.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.3/mode/javascript/javascript.min.js"></script>
+<script>
+$(document).ready(function() {
+    // 初始化配置编辑器
+    const templateEditor = CodeMirror.fromTextArea(document.getElementById('template_content'), {
+        lineNumbers: true,
+        theme: "eclipse",
+        mode: "properties",
+        lineWrapping: true
+    });
+    
+    // 初始化拓扑数据编辑器
+    const topoEditor = CodeMirror.fromTextArea(document.getElementById('topology_data'), {
+        lineNumbers: true,
+        theme: "eclipse",
+        mode: "application/json",
+        lineWrapping: true,
+        matchBrackets: true
+    });
+    
+    // 根据设备类型切换模板示例
+    $('#device_type').change(function() {
+        const deviceType = $(this).val();
+        let templateExample = '';
+        
+        switch(deviceType) {
+            case 'huawei_ar':
+                templateExample = `#
+sysname \${HOSTNAME}
+#
+interface GigabitEthernet0/0
+ ip address \${IP_ADDRESS} 255.255.255.0
+ description Management
+#
+interface GigabitEthernet0/1
+ description LAN
+#
+interface GigabitEthernet0/2
+ description WAN
+#
+user-interface con 0
+ authentication-mode password
+ set authentication password cipher admin
+#
+user-interface vty 0 4
+ authentication-mode password
+ set authentication password cipher admin
+#
+return`;
+                break;
+                
+            case 'huawei_s':
+                templateExample = `#
+sysname \${HOSTNAME}
+#
+vlan batch 10 20 30
+#
+interface Vlanif1
+ ip address \${IP_ADDRESS} 255.255.255.0
+ description Management
+#
+interface GigabitEthernet0/0/1
+ description Uplink
+ port link-type trunk
+ port trunk allow-pass vlan 10 20 30
+#
+interface GigabitEthernet0/0/2
+ description Access
+ port link-type access
+ port default vlan 10
+#
+user-interface con 0
+ authentication-mode password
+ set authentication password cipher admin
+#
+user-interface vty 0 4
+ authentication-mode password
+ set authentication password cipher admin
+#
+return`;
+                break;
+                
+            case 'cisco_ios':
+                templateExample = `!
+hostname \${HOSTNAME}
+!
+interface GigabitEthernet0/0
+ ip address \${IP_ADDRESS} 255.255.255.0
+ description Management
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description LAN
+ no shutdown
+!
+interface GigabitEthernet0/2
+ description WAN
+ no shutdown
+!
+line con 0
+ password admin
+ login
+!
+line vty 0 4
+ password admin
+ login
+!
+end`;
+                break;
+                
+            default:
+                templateExample = `# 配置模板
+# 可以使用以下变量:
+# \${HOSTNAME} - 设备主机名
+# \${IP_ADDRESS} - 设备IP地址
+# \${DEVICE_TYPE} - 设备类型
+# \${DEVICE_ID} - 设备ID
+
+# 示例配置
+hostname \${HOSTNAME}
+`;
+        }
+        
+        templateEditor.setValue(templateExample);
+    });
+    
+    // 初始触发一次change事件来加载默认模板
+    $('#device_type').trigger('change');
+    
+    // 提交前验证JSON格式
+    $('form').submit(function(e) {
+        try {
+            const topoData = topoEditor.getValue().trim();
+            if (topoData) {
+                JSON.parse(topoData);
+            }
+        } catch (error) {
+            e.preventDefault();
+            alert('拓扑数据不是有效的JSON格式: ' + error.message);
+        }
+    });
+});
+</script>
+{% endblock %}

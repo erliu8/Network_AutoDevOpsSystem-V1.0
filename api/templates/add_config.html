@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}添加配置模板 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">添加配置模板</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-plus-circle me-1"></i>
+                模板信息
+            </div>
+            <div class="card-body">
+                {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                <form method="post" action="{{ url_for('add_config_template') }}">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">模板名称</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="device_type" class="form-label">适用设备类型</label>
+                        <select class="form-select" id="device_type" name="device_type" required>
+                            <option value="generic">通用</option>
+                            <option value="cisco_ios">Cisco IOS</option>
+                            <option value="cisco_nxos">Cisco NXOS</option>
+                            <option value="cisco_asa">Cisco ASA</option>
+                            <option value="huawei">华为</option>
+                            <option value="h3c">H3C</option>
+                            <option value="ruijie">锐捷</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">模板描述</label>
+                        <input type="text" class="form-control" id="description" name="description" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="config_content" class="form-label">配置内容</label>
+                        <textarea class="form-control" id="config_content" name="config_content" rows="15" required></textarea>
+                        <div class="form-text">
+                            每行输入一条配置命令。可以使用变量格式如 ${VARIABLE_NAME}，应用时可替换。
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('config_templates') }}" class="btn btn-secondary me-md-2">取消</a>
+                        <button type="submit" class="btn btn-primary">添加模板</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 配置示例模板
+        const templateExamples = {
+            'cisco_ios': '! Cisco IOS 配置示例\nhostname ${HOSTNAME}\n!\ninterface GigabitEthernet0/1\n description ${DESCRIPTION}\n ip address ${IP_ADDRESS} ${SUBNET_MASK}\n no shutdown\n!\nip route 0.0.0.0 0.0.0.0 ${DEFAULT_GATEWAY}',
+            'huawei': '# 华为设备配置示例\nsysname ${HOSTNAME}\n#\ninterface GigabitEthernet0/0/1\n description ${DESCRIPTION}\n ip address ${IP_ADDRESS} ${SUBNET_MASK}\n undo shutdown\n#\nip route-static 0.0.0.0 0.0.0.0 ${DEFAULT_GATEWAY}',
+            'h3c': '# H3C设备配置示例\nsysname ${HOSTNAME}\n#\ninterface GigabitEthernet1/0/1\n description ${DESCRIPTION}\n ip address ${IP_ADDRESS} ${SUBNET_MASK}\n undo shutdown\n#\nip route-static 0.0.0.0 0.0.0.0 ${DEFAULT_GATEWAY}',
+            'generic': '# 通用配置示例\n# 可以根据具体设备替换以下命令\n${COMMAND1}\n${COMMAND2}\n${COMMAND3}'
+        };
+
+        // 根据设备类型变更示例
+        $('#device_type').change(function() {
+            const deviceType = $(this).val();
+            if (templateExamples[deviceType] && $('#config_content').val() === '') {
+                $('#config_content').val(templateExamples[deviceType]);
+            }
+        });
+
+        // 初始化时触发一次
+        $('#device_type').trigger('change');
+    });
+</script>
+{% endblock %}

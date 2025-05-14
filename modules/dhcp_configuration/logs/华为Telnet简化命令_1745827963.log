@@ -1,0 +1,44 @@
+
+
+Login authentication
+
+
+Username:********
+Password:
+<AR5>
+<AR5>
+<AR5>screen-length 0 temporary
+Info: The configuration takes effect on the current user terminal interface only.
+<AR5>display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.********30 (AR2200 V200R003C00)
+Copyright (C) 20****************-20********2 HUAWEI TECH CO., LTD
+Huawei AR2220 Router uptime is 0 week, 0 day, 0 hour, 35 minutes
+BKP 0 version information: 
+********. PCB      Version  : AR0********BAK2A VER.NC
+2. If Supporting PoE : No
+3. Board    Type     : AR2220
+4. MPU Slot Quantity : ********
+5. LPU Slot Quantity : 6
+
+MPU 0(Master) : uptime is 0 week, 0 day, 0 hour, 35 minutes
+MPU version information : 
+********. PCB      Version  : AR0********SRU2A VER.A
+2. MAB      Version  : 0
+3. Board    Type     : AR2220
+4. BootROM  Version  : 0
+
+
+<AR5>system-view
+Enter system view, return user view with Ctrl+Z.
+[AR5]ip pool zg********
+Info: It's successful to create an IP address pool.
+[AR5-ip-pool-zg********]network ********92.********68.66.0 mask 255.255.255.0
+[AR5-ip-pool-zg********]forbidden-ip-address ********92.********68.66.2
+                 ^
+Error: Unrecognized command found at '^' position.
+[AR5-ip-pool-zg********]dns-list 8.8.8.8
+[AR5-ip-pool-zg********]quit
+[AR5]quit
+<AR5>
+<AR5>quit

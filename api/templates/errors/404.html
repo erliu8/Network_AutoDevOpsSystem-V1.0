@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block title %}页面未找到 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center vh-75">
+    <div class="text-center">
+        <h1 class="display-1 fw-bold">404</h1>
+        <p class="fs-3">
+            <span class="text-danger">糟糕！</span> 页面未找到。
+        </p>
+        <p class="lead">
+            您尝试访问的页面不存在或已被移除。
+        </p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">返回首页</a>
+    </div>
+</div>
+{% endblock %}

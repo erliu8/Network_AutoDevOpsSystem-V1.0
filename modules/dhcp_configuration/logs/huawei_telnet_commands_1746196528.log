@@ -1,0 +1,80 @@
+===== 将执行以下命令 =====
+1. system-view
+2. ip pool zhhhh6666
+3. gateway-list 192.168.88.1
+4. network 192.168.88.0 mask 255.255.255.0
+5. dns-list 9.9.9.9
+6. quit
+7. quit
+===== 命令列表结束 =====
+
+
+===== 执行日志 =====
+登录提示: 
+
+Login authentication
+
+
+Username:
+密码提示: 1
+Password:
+登录响应: 
+Info: The max number of VTY users is 5, and the number
+      of current VTY users on line is 4.
+      The current login time is 2025-05-02 22:35:24.
+<LSW1>
+命令 'system-view' 响应: system-view
+Enter system view, return user view with Ctrl+Z.
+[LSW1]
+命令 'ip pool zhhhh6666' 响应: ip pool zhhhh6666
+[LSW1-ip-pool-zhhhh6666]
+命令 'gateway-list 192.168.88.1' 响应: gateway-list 192.168.88.1
+[LSW1-ip-pool-zhhhh6666]
+命令 'network 192.168.88.0 mask 255.255.255.0' 响应: network 192.168.88.0 mask 255.255.255.0
+Error:The network section should be within the subnet of the pool.
+[LSW1-ip-pool-zhhhh6666]
+命令 'dns-list 9.9.9.9' 响应: dns-list 9.9.9.9
+[LSW1-ip-pool-zhhhh6666]
+命令 'quit' 响应: quit
+[LSW1]
+命令 'quit' 响应: quit
+<LSW1>
+
+===== 命令执行结果 =====
+命令 1: system-view
+输出:
+system-view
+Enter system view, return user view with Ctrl+Z.
+[LSW1]
+--------------------------------------------------
+命令 2: ip pool zhhhh6666
+输出:
+ip pool zhhhh6666
+[LSW1-ip-pool-zhhhh6666]
+--------------------------------------------------
+命令 3: gateway-list 192.168.88.1
+输出:
+gateway-list 192.168.88.1
+[LSW1-ip-pool-zhhhh6666]
+--------------------------------------------------
+命令 4: network 192.168.88.0 mask 255.255.255.0
+输出:
+network 192.168.88.0 mask 255.255.255.0
+Error:The network section should be within the subnet of the pool.
+[LSW1-ip-pool-zhhhh6666]
+--------------------------------------------------
+命令 5: dns-list 9.9.9.9
+输出:
+dns-list 9.9.9.9
+[LSW1-ip-pool-zhhhh6666]
+--------------------------------------------------
+命令 6: quit
+输出:
+quit
+[LSW1]
+--------------------------------------------------
+命令 7: quit
+输出:
+quit
+<LSW1>
+--------------------------------------------------

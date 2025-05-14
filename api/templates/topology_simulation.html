@@ -1,0 +1,945 @@
+{% extends 'base.html' %}
+
+{% block title %}拓扑模拟 - 校园网络自动化运维系统{% endblock %}
+
+{% block styles %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" rel="stylesheet">
+<style>
+    #mynetwork {
+        width: 100%;
+        height: 500px;
+        border: 1px solid #ccc;
+        background-color: #f8f9fa;
+    }
+    .simulation-step {
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+    }
+    .step-active {
+        background-color: #e9f7ef;
+        border-left: 4px solid #28a745;
+    }
+    .step-inactive {
+        background-color: #f8f9fa;
+        border-left: 4px solid #6c757d;
+    }
+    .device-list-item {
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    .device-list-item:hover {
+        background-color: #f1f1f1;
+    }
+    .device-list-item.selected {
+        background-color: #e2f0ff;
+        border-left: 4px solid #007bff;
+    }
+    .template-card {
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .template-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .template-card.selected {
+        border: 2px solid #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">eNSP拓扑模拟集成</h1>
+        <div>
+            <a href="{{ url_for('simulation_templates') }}" class="btn btn-outline-primary me-2">
+                <i class="fas fa-file-code"></i> 模拟模板
+            </a>
+            <a href="{{ url_for('simulation_history') }}" class="btn btn-outline-info">
+                <i class="fas fa-history"></i> 历史模拟
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-3">
+        <!-- 步骤导航 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-list me-1"></i>
+                模拟步骤
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <a href="#step1" class="list-group-item list-group-item-action step-link active" data-step="1">
+                        <i class="fas fa-check-circle me-2 text-success"></i> 选择设备
+                    </a>
+                    <a href="#step2" class="list-group-item list-group-item-action step-link" data-step="2">
+                        <i class="fas fa-circle me-2 text-secondary"></i> 选择模板
+                    </a>
+                    <a href="#step3" class="list-group-item list-group-item-action step-link" data-step="3">
+                        <i class="fas fa-circle me-2 text-secondary"></i> 配置拓扑
+                    </a>
+                    <a href="#step4" class="list-group-item list-group-item-action step-link" data-step="4">
+                        <i class="fas fa-circle me-2 text-secondary"></i> 运行模拟
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- eNSP状态 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-info-circle me-1"></i>
+                eNSP状态
+            </div>
+            <div class="card-body">
+                <div id="enspStatus" class="alert alert-info">
+                    正在检查eNSP状态...
+                </div>
+                <button id="checkEnspBtn" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-sync-alt"></i> 检查状态
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-9">
+        <!-- 步骤内容 -->
+        <div id="simulationSteps">
+            <!-- 步骤1: 选择设备 -->
+            <div id="step1" class="card mb-4 simulation-step step-active">
+                <div class="card-header">
+                    <i class="fas fa-server me-1"></i>
+                    步骤1: 选择设备
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="text" id="deviceSearchInput" class="form-control" placeholder="搜索设备...">
+                                <button class="btn btn-outline-secondary" type="button">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div class="btn-group" role="group">
+                                <button id="selectAllDevicesBtn" class="btn btn-sm btn-outline-primary">全选</button>
+                                <button id="deselectAllDevicesBtn" class="btn btn-sm btn-outline-secondary">取消全选</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="list-group" id="deviceList">
+                                {% for device in devices %}
+                                <div class="list-group-item device-list-item" data-id="{{ device.id }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="device-name fw-bold">{{ device.hostname }}</span>
+                                            <span class="text-muted ms-2">({{ device.ip_address }})</span>
+                                            <small class="d-block text-muted">
+                                                {% if device.network_layer == 'core' %}
+                                                <span class="badge bg-danger">核心层</span>
+                                                {% elif device.network_layer == 'distribution' %}
+                                                <span class="badge bg-warning">汇聚层</span>
+                                                {% elif device.network_layer == 'access' %}
+                                                <span class="badge bg-info">接入层</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary">{{ device.network_layer }}</span>
+                                                {% endif %}
+                                                {{ device.device_type }}
+                                            </small>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input device-checkbox" type="checkbox" value="{{ device.id }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12 text-end">
+                            <button id="nextToStep2Btn" class="btn btn-primary">
+                                下一步 <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 步骤2: 选择模板 -->
+            <div id="step2" class="card mb-4 simulation-step step-inactive d-none">
+                <div class="card-header">
+                    <i class="fas fa-file-code me-1"></i>
+                    步骤2: 选择模板
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 选择一个预设模板，或者跳过此步骤使用默认设置。
+                    </div>
+                    
+                    <div class="row mb-3">
+                        {% if simulations %}
+                        {% for template in simulations %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card template-card" data-id="{{ template.id }}">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ template.name }}</h5>
+                                    <p class="card-text small text-muted">{{ template.description }}</p>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <small class="text-muted">创建于: {{ template.created_at }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="col-12">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> 没有可用的模拟模板。您可以选择创建新模板或使用默认设置。
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12 d-flex justify-content-between">
+                            <button id="backToStep1Btn" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> 上一步
+                            </button>
+                            <div>
+                                <button id="skipTemplateBtn" class="btn btn-outline-primary me-2">跳过此步骤</button>
+                                <button id="nextToStep3Btn" class="btn btn-primary">
+                                    下一步 <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 步骤3: 配置拓扑 -->
+            <div id="step3" class="card mb-4 simulation-step step-inactive d-none">
+                <div class="card-header">
+                    <i class="fas fa-project-diagram me-1"></i>
+                    步骤3: 配置拓扑
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="simulationNameInput" class="form-label">模拟名称</label>
+                                <input type="text" class="form-control" id="simulationNameInput" 
+                                       placeholder="输入模拟名称" value="Simulation_{{ now.strftime('%Y%m%d_%H%M%S') }}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="topologyTypeSelect" class="form-label">拓扑类型</label>
+                                <select class="form-select" id="topologyTypeSelect">
+                                    <option value="auto">自动 (根据网络层级)</option>
+                                    <option value="star">星型</option>
+                                    <option value="ring">环型</option>
+                                    <option value="mesh">网状</option>
+                                    <option value="linear">线性</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">高级选项</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="autoConfigureIpsCheck" checked>
+                                    <label class="form-check-label" for="autoConfigureIpsCheck">
+                                        自动配置IP地址
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="createDefaultRoutesCheck" checked>
+                                    <label class="form-check-label" for="createDefaultRoutesCheck">
+                                        创建默认路由
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableOspfCheck">
+                                    <label class="form-check-label" for="enableOspfCheck">
+                                        启用OSPF路由
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="form-label">网络拓扑预览</label>
+                            <div id="mynetwork"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12 d-flex justify-content-between">
+                            <button id="backToStep2Btn" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> 上一步
+                            </button>
+                            <button id="nextToStep4Btn" class="btn btn-primary">
+                                下一步 <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 步骤4: 运行模拟 -->
+            <div id="step4" class="card mb-4 simulation-step step-inactive d-none">
+                <div class="card-header">
+                    <i class="fas fa-play-circle me-1"></i>
+                    步骤4: 运行模拟
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-primary">
+                        <i class="fas fa-info-circle"></i> 确认以下配置无误后，点击"开始模拟"按钮运行模拟。
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    模拟配置摘要
+                                </div>
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>模拟名称:</span>
+                                        <span id="summaryName" class="fw-bold"></span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>设备数量:</span>
+                                        <span id="summaryDeviceCount" class="fw-bold"></span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>拓扑类型:</span>
+                                        <span id="summaryTopoType" class="fw-bold"></span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>使用模板:</span>
+                                        <span id="summaryTemplate" class="fw-bold"></span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    eNSP集成
+                                </div>
+                                <div class="card-body">
+                                    <div id="enspIntegrationStatus" class="alert alert-info">
+                                        准备就绪，点击"开始模拟"准备就绪，点击"开始模拟"按钮运行模拟。
+                                    </div>
+                                    <div class="d-grid gap-2">
+                                        <button id="runSimulationBtn" class="btn btn-success">
+                                            <i class="fas fa-play-circle"></i> 开始模拟
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 结果区域 -->
+                    <div id="simulationResultArea" class="mt-3 d-none">
+                        <h5><i class="fas fa-clipboard-check"></i> 模拟结果</h5>
+                        <div class="card">
+                            <div class="card-body">
+                                <div id="simulationResultContent"></div>
+
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                            <button id="downloadSimulationBtn" class="btn btn-primary me-md-2">
+                                                <i class="fas fa-download"></i> 下载配置
+                                            </button>
+                                            <button id="openEnspBtn" class="btn btn-info">
+                                                <i class="fas fa-external-link-alt"></i> 在eNSP中打开
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-12 d-flex justify-content-between">
+                            <button id="backToStep3Btn" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> 上一步
+                            </button>
+                            <button id="createNewSimulationBtn" class="btn btn-outline-primary d-none">
+                                <i class="fas fa-plus"></i> 创建新模拟
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js"></script>
+<script>
+$(document).ready(function() {
+    // 设备选择功能
+    $('.device-list-item').click(function() {
+        const checkbox = $(this).find('input[type="checkbox"]');
+        checkbox.prop('checked', !checkbox.prop('checked'));
+        updateDeviceListItem($(this));
+    });
+
+    $('.device-checkbox').change(function(e) {
+        e.stopPropagation();
+        updateDeviceListItem($(this).closest('.device-list-item'));
+    });
+
+    function updateDeviceListItem(item) {
+        const isChecked = item.find('input[type="checkbox"]').prop('checked');
+        if (isChecked) {
+            item.addClass('selected');
+        } else {
+            item.removeClass('selected');
+        }
+    }
+
+    // 全选/取消全选
+    $('#selectAllDevicesBtn').click(function() {
+        $('.device-checkbox').prop('checked', true);
+        $('.device-list-item').addClass('selected');
+    });
+
+    $('#deselectAllDevicesBtn').click(function() {
+        $('.device-checkbox').prop('checked', false);
+        $('.device-list-item').removeClass('selected');
+    });
+
+    // 设备搜索
+    $('#deviceSearchInput').on('keyup', function() {
+        const searchValue = $(this).val().toLowerCase();
+        $('.device-list-item').each(function() {
+            const deviceName = $(this).find('.device-name').text().toLowerCase();
+            const deviceIp = $(this).find('.text-muted').text().toLowerCase();
+            if (deviceName.includes(searchValue) || deviceIp.includes(searchValue)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // 步骤导航
+    $('.step-link').click(function(e) {
+        e.preventDefault();
+        const step = $(this).data('step');
+        navigateToStep(step);
+    });
+
+    // 模板选择
+    $('.template-card').click(function() {
+        $('.template-card').removeClass('selected');
+        $(this).addClass('selected');
+    });
+
+    // 步骤按钮事件绑定
+    $('#nextToStep2Btn').click(function() {
+        const selectedDevices = $('.device-checkbox:checked').length;
+        if (selectedDevices === 0) {
+            alert('请至少选择一个设备');
+            return;
+        }
+        navigateToStep(2);
+    });
+
+    $('#backToStep1Btn').click(function() {
+        navigateToStep(1);
+    });
+
+    $('#skipTemplateBtn, #nextToStep3Btn').click(function() {
+        navigateToStep(3);
+        initializeNetworkGraph();
+    });
+
+    $('#backToStep2Btn').click(function() {
+        navigateToStep(2);
+    });
+
+    $('#nextToStep4Btn').click(function() {
+        // 更新摘要信息
+        $('#summaryName').text($('#simulationNameInput').val());
+        $('#summaryDeviceCount').text($('.device-checkbox:checked').length);
+        $('#summaryTopoType').text($('#topologyTypeSelect option:selected').text());
+
+        const templateCard = $('.template-card.selected');
+        if (templateCard.length > 0) {
+            $('#summaryTemplate').text(templateCard.find('.card-title').text());
+        } else {
+            $('#summaryTemplate').text('无 (使用默认配置)');
+        }
+
+        navigateToStep(4);
+    });
+
+    $('#backToStep3Btn').click(function() {
+        navigateToStep(3);
+    });
+
+    $('#createNewSimulationBtn').click(function() {
+        $('.device-checkbox').prop('checked', false);
+        $('.device-list-item').removeClass('selected');
+        $('.template-card').removeClass('selected');
+        $('#simulationNameInput').val('Simulation_' + new Date().toISOString().replace(/[-:.TZ]/g, '').substring(0, 14));
+        $('#topologyTypeSelect').val('auto');
+        $('#simulationResultArea').addClass('d-none');
+        $('#runSimulationBtn').prop('disabled', false);
+        $('#enspIntegrationStatus').removeClass('alert-success alert-danger').addClass('alert-info')
+            .html('准备就绪，点击"开始模拟"按钮运行模拟。');
+
+        navigateToStep(1);
+    });
+
+    // 运行模拟
+    $('#runSimulationBtn').click(function() {
+        const button = $(this);
+        const simulationName = $('#simulationNameInput').val();
+        const selectedDeviceIds = [];
+
+        $('.device-checkbox:checked').each(function() {
+            selectedDeviceIds.push(parseInt($(this).val()));
+        });
+
+        const templateId = $('.template-card.selected').data('id');
+        const topologyType = $('#topologyTypeSelect').val();
+
+        const configOptions = {
+            autoIp: $('#autoConfigureIpsCheck').prop('checked'),
+            defaultRoutes: $('#createDefaultRoutesCheck').prop('checked'),
+            enableOspf: $('#enableOspfCheck').prop('checked'),
+            topologyType: topologyType
+        };
+
+        // 禁用按钮并显示加载状态
+        button.prop('disabled', true);
+        $('#enspIntegrationStatus').removeClass('alert-success alert-danger').addClass('alert-info')
+            .html('<i class="fas fa-spinner fa-spin"></i> 正在运行模拟，请稍候...');
+
+        // 调用API运行模拟
+        $.ajax({
+            url: '/api/topology/simulation/run',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                name: simulationName,
+                device_ids: selectedDeviceIds,
+                template_id: templateId,
+                config_options: configOptions
+            }),
+            success: function(response) {
+                if (response.success) {
+                    $('#enspIntegrationStatus').removeClass('alert-info alert-danger').addClass('alert-success')
+                        .html('<i class="fas fa-check-circle"></i> 模拟配置生成成功！');
+
+                    // 显示结果
+                    $('#simulationResultArea').removeClass('d-none');
+
+                    // 设置结果内容
+                    let resultHtml = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> 模拟配置已成功生成，您可以下载配置并在eNSP中打开。
+                        </div>
+                        <h6>模拟ID:</h6>
+                        <p>${response.simulation_id}</p>
+                        <h6>模拟项目文件:</h6>
+                        <p>${response.result.project_file || 'N/A'}</p>
+                    `;
+
+                    if (response.result.instructions) {
+                        resultHtml += `
+                            <h6>使用说明:</h6>
+                            <div class="alert alert-info">
+                                ${response.result.instructions}
+                            </div>
+                        `;
+                    }
+
+                    $('#simulationResultContent').html(resultHtml);
+
+                    // 保存模拟ID用于下载
+                    $('#downloadSimulationBtn').data('simulation-id', response.simulation_id);
+
+                    // 显示创建新模拟按钮
+                    $('#createNewSimulationBtn').removeClass('d-none');
+                } else {
+                    $('#enspIntegrationStatus').removeClass('alert-info alert-success').addClass('alert-danger')
+                        .html(`<i class="fas fa-exclamation-circle"></i> 模拟失败: ${response.error}`);
+                    button.prop('disabled', false);
+                }
+            },
+            error: function(xhr) {
+                const errorMsg = xhr.responseJSON?.error || xhr.statusText || '未知错误';
+                $('#enspIntegrationStatus').removeClass('alert-info alert-success').addClass('alert-danger')
+                    .html(`<i class="fas fa-exclamation-circle"></i> 请求失败: ${errorMsg}`);
+                button.prop('disabled', false);
+            }
+        });
+    });
+
+    // 下载配置
+    // 下载配置
+// Modifica la función de descarga en topology_simulation.html
+
+// Reemplaza esta parte en el script JavaScript (dentro de la sección $(document).ready):
+
+$('#downloadSimulationBtn').click(function() {
+    const simulationId = $(this).data('simulation-id');
+    if (!simulationId) {
+        alert('找不到模拟ID，请重新运行模拟');
+        return;
+    }
+
+    // 显示加载状态
+    const originalText = $(this).html();
+    $(this).html('<i class="fas fa-spinner fa-spin"></i> 准备下载...');
+    $(this).prop('disabled', true);
+
+    // 调用导出API
+    $.ajax({
+        url: `/api/topology/simulation/export/${simulationId}`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                // 显示成功状态
+                $('#enspIntegrationStatus').removeClass('alert-info alert-danger').addClass('alert-success')
+                    .html('<i class="fas fa-check-circle"></i> 配置文件准备就绪，正在开始下载...');
+
+                console.log('下载URL:', response.download_url);
+
+                // 使用iframe隐式下载
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = response.download_url;
+                document.body.appendChild(iframe);
+
+                // 移除iframe
+                setTimeout(function() {
+                    document.body.removeChild(iframe);
+                }, 2000);
+
+                // 恢复按钮状态
+                setTimeout(function() {
+                    $('#downloadSimulationBtn').html(originalText);
+                    $('#downloadSimulationBtn').prop('disabled', false);
+                }, 1000);
+            } else {
+                // 显示错误
+                alert(`导出失败: ${response.error}`);
+                $('#enspIntegrationStatus').removeClass('alert-info alert-success').addClass('alert-danger')
+                    .html(`<i class="fas fa-exclamation-circle"></i> 导出失败: ${response.error}`);
+
+                // 恢复按钮状态
+                $('#downloadSimulationBtn').html(originalText);
+                $('#downloadSimulationBtn').prop('disabled', false);
+            }
+        },
+        error: function(xhr) {
+            // 处理错误
+            const errorMsg = xhr.responseJSON?.error || xhr.statusText || '未知错误';
+            alert(`请求失败: ${errorMsg}`);
+            $('#enspIntegrationStatus').removeClass('alert-info alert-success').addClass('alert-danger')
+                .html(`<i class="fas fa-exclamation-circle"></i> 请求失败: ${errorMsg}`);
+
+            // 恢复按钮状态
+            $('#downloadSimulationBtn').html(originalText);
+            $('#downloadSimulationBtn').prop('disabled', false);
+
+            // 记录详细错误
+            console.error('下载错误:', xhr);
+        }
+    });
+});
+
+
+
+
+
+
+    // 在eNSP中打开
+    $('#openEnspBtn').click(function() {
+        $('#enspIntegrationStatus').html('<i class="fas fa-info-circle"></i> 请确保eNSP已安装并打开，然后使用导入功能加载导出的项目文件。');
+    });
+
+    // 检查eNSP状态
+    $('#checkEnspBtn').click(function() {
+        $('#enspStatus').html('<i class="fas fa-spinner fa-spin"></i> 正在检查eNSP状态...');
+
+        $.ajax({
+            url: '/api/topology/simulation/check-ensp',
+            method: 'GET',
+            success: function(response) {
+                if (response.installed) {
+                    $('#enspStatus').html(`<i class="fas fa-check-circle"></i> eNSP已安装 (版本: ${response.version || '未知'})`);
+                } else {
+                    $('#enspStatus').html(`<i class="fas fa-exclamation-triangle"></i> 未检测到eNSP。${response.message || ''}`);
+                }
+            },
+            error: function() {
+                $('#enspStatus').html('<i class="fas fa-exclamation-circle"></i> 检查失败，请确保系统服务正常运行。');
+            }
+        });
+    });
+
+    // 初始检查eNSP状态
+    $('#checkEnspBtn').trigger('click');
+
+    // 导航到指定步骤
+    function navigateToStep(step) {
+        // 更新步骤链接状态
+        $('.step-link').removeClass('active').find('i').removeClass('fa-check-circle text-success').addClass('fa-circle text-secondary');
+        $(`.step-link[data-step="${step}"]`).addClass('active').find('i').removeClass('fa-circle text-secondary').addClass('fa-check-circle text-success');
+
+        // 更新步骤内容显示
+        $('.simulation-step').addClass('d-none step-inactive').removeClass('step-active');
+        $(`#step${step}`).removeClass('d-none step-inactive').addClass('step-active');
+    }
+
+    // 初始化网络图
+function initializeNetworkGraph() {
+    // 获取选中的设备数据
+    const selectedDevices = [];
+    $('.device-checkbox:checked').each(function() {
+        const deviceItem = $(this).closest('.device-list-item');
+        const deviceId = parseInt($(this).val());
+        const deviceName = deviceItem.find('.device-name').text();
+        const deviceLayer = deviceItem.find('.badge').text();
+
+        let nodeGroup = 'access';
+        if (deviceLayer.includes('核心')) {
+            nodeGroup = 'core';
+        } else if (deviceLayer.includes('汇聚')) {
+            nodeGroup = 'distribution';
+        }
+
+        // 添加节点
+        selectedDevices.push({
+            id: deviceId,
+            label: deviceName,
+            group: nodeGroup
+        });
+    });
+
+    // 如果没有选择设备，显示提示信息
+    if (selectedDevices.length === 0) {
+        $('#mynetwork').html('<div class="alert alert-warning">请先选择设备</div>');
+        return;
+    }
+
+    console.log("初始化网络图，选中设备数量:", selectedDevices.length);
+
+    // 创建节点和边
+    const nodes = new vis.DataSet(selectedDevices);
+    const edges = new vis.DataSet();
+
+    // 根据拓扑类型生成连接
+    const topoType = $('#topologyTypeSelect').val();
+    console.log("拓扑类型:", topoType);
+
+    // 创建连接
+    if (topoType === 'star' && selectedDevices.length > 1) {
+        // 星型拓扑: 第一个设备作为中心连接到所有其他设备
+        const centerId = selectedDevices[0].id;
+        for (let i = 1; i < selectedDevices.length; i++) {
+            edges.add({
+                from: centerId,
+                to: selectedDevices[i].id
+            });
+        }
+        console.log("创建星型拓扑");
+    } else if (topoType === 'ring' && selectedDevices.length > 1) {
+        // 环型拓扑: 每个设备连接到下一个设备，最后一个连接到第一个
+        for (let i = 0; i < selectedDevices.length; i++) {
+            const nextIdx = (i + 1) % selectedDevices.length;
+            edges.add({
+                from: selectedDevices[i].id,
+                to: selectedDevices[nextIdx].id
+            });
+        }
+        console.log("创建环型拓扑");
+    } else if (topoType === 'mesh' && selectedDevices.length > 1) {
+        // 网状拓扑: 每个设备连接到所有其他设备
+        for (let i = 0; i < selectedDevices.length; i++) {
+            for (let j = i + 1; j < selectedDevices.length; j++) {
+                edges.add({
+                    from: selectedDevices[i].id,
+                    to: selectedDevices[j].id
+                });
+            }
+        }
+        console.log("创建网状拓扑");
+    } else if (topoType === 'linear' && selectedDevices.length > 1) {
+        // 线性拓扑: 每个设备连接到下一个设备
+        for (let i = 0; i < selectedDevices.length - 1; i++) {
+            edges.add({
+                from: selectedDevices[i].id,
+                to: selectedDevices[i + 1].id
+            });
+        }
+        console.log("创建线性拓扑");
+    } else {
+        // 自动 (根据网络层级)
+        const coreLayers = selectedDevices.filter(d => d.group === 'core');
+        const distLayers = selectedDevices.filter(d => d.group === 'distribution');
+        const accessLayers = selectedDevices.filter(d => d.group === 'access');
+
+        console.log("层级设备数量: 核心=", coreLayers.length, "汇聚=", distLayers.length, "接入=", accessLayers.length);
+
+        // 连接核心层到汇聚层
+        for (const core of coreLayers) {
+            for (const dist of distLayers) {
+                edges.add({
+                    from: core.id,
+                    to: dist.id
+                });
+            }
+        }
+
+        // 连接汇聚层到接入层
+        for (const dist of distLayers) {
+            for (const access of accessLayers) {
+                edges.add({
+                    from: dist.id,
+                    to: access.id
+                });
+            }
+        }
+
+        // 如果没有足够的层级，创建简单的环形连接
+        if (edges.length === 0 && selectedDevices.length > 1) {
+            for (let i = 0; i < selectedDevices.length; i++) {
+                const nextIdx = (i + 1) % selectedDevices.length;
+                edges.add({
+                    from: selectedDevices[i].id,
+                    to: selectedDevices[nextIdx].id
+                });
+            }
+            console.log("创建默认环形拓扑");
+        }
+    }
+
+    console.log("创建了", edges.length, "条连接");
+
+    // 创建网络图
+    const container = document.getElementById('mynetwork');
+    const data = {
+        nodes: nodes,
+        edges: edges
+    };
+
+    const options = {
+        nodes: {
+            shape: 'image',
+            image: function(data) {
+                if (data.group === 'core') {
+                    return '/static/images/router.png';
+                } else if (data.group === 'distribution') {
+                    return '/static/images/switch_l3.png';
+                } else {
+                    return '/static/images/switch.png';
+                }
+            },
+            size: 40,
+            font: {
+                size: 12
+            }
+        },
+        edges: {
+            smooth: {
+                type: 'continuous'
+            },
+            arrows: {
+                to: {
+                    enabled: false
+                }
+            }
+        },
+        physics: {
+            enabled: true,
+            barnesHut: {
+                gravitationalConstant: -2000,
+                centralGravity: 0.3,
+                springLength: 150,
+                springConstant: 0.04
+            },
+            stabilization: true
+        },
+        groups: {
+            core: {
+                color: {
+                    background: '#FF5733',
+                    border: '#D84315',
+                    highlight: {
+                        background: '#FF8A65',
+                        border: '#D84315'
+                    }
+                }
+            },
+            distribution: {
+                color: {
+                    background: '#33FF57',
+                    border: '#2E7D32',
+                    highlight: {
+                        background: '#66BB6A',
+                        border: '#2E7D32'
+                    }
+                }
+            },
+            access: {
+                color: {
+                    background: '#3357FF',
+                    border: '#1A237E',
+                    highlight: {
+                        background: '#5C6BC0',
+                        border: '#1A237E'
+                    }
+                }
+            }
+        }
+    };
+
+    // 清除原有网络图(如果有)
+    if (window.network) {
+        window.network.destroy();
+    }
+
+    // 创建新的网络图
+    window.network = new vis.Network(container, data, options);
+
+    // 在控制台输出网络图信息
+    console.log("网络图创建成功, 节点数:", nodes.length, "连接数:", edges.length);
+}
+
+    // 拓扑类型变更时重新绘制网络图
+    $('#topologyTypeSelect').change(function() {
+        if ($('#step3').is(':visible')) {
+            initializeNetworkGraph();
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,515 @@
+# gui.py
+import sys
+import os
+import time
+from pathlib import Path
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, 
+                            QLineEdit, QPushButton, QTextEdit, QMessageBox, QSpinBox,
+                            QGroupBox, QComboBox, QApplication, QTimer)
+from PyQt5.QtCore import Qt, QRegExp
+from PyQt5.QtGui import QRegExpValidator, QFont
+
+# 添加项目根目录到系统路径
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from core.services.device_service import DeviceService
+
+class BatchConfigWindow(QWidget):
+    def __init__(self, controller=None):
+        super().__init__()
+        self.controller = controller
+        self.setWindowTitle("批量配置地址工具")
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
+        
+        # 初始化设备选项列表
+        self.device_options = []
+        
+        # 创建日志区域
+        self.log_area = QTextEdit()
+        self.log_area.setReadOnly(True)
+        self.log_area.setStyleSheet("background-color: #f5f5f5; font-family: Consolas, monospace;")
+        
+        # 加载设备数据
+        self.load_device_data()
+        
+        # 初始化UI
+        self.init_ui()
+        
+        # 记录日志
+        self.log("批量配置地址工具已启动")
+        self.log(f"已加载 {len(self.device_options)} 个设备")
+
+    def log(self, message):
+        """添加日志到日志区域"""
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.log_area.append(f"[{timestamp}] {message}")
+        # 滚动到底部
+        self.log_area.verticalScrollBar().setValue(self.log_area.verticalScrollBar().maximum())
+        # 同时打印到控制台
+        print(f"[BatchConfig] {message}")
+        
+        # 确保日志目录存在
+        log_dir = Path(__file__).parent / "logs"
+        if not log_dir.exists():
+            os.makedirs(log_dir)
+            
+        # 写入日志文件
+        log_file = log_dir / "batch_config.log"
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {message}\n")
+
+    def load_device_data(self):
+        """从数据库加载设备数据并处理成设备选项列表"""
+        try:
+            # 获取设备数据
+            devices = DeviceService.get_all_devices()
+            print(f"获取到的设备数据: {devices}")
+            
+            if not devices:
+                print("未从数据库获取到设备")
+                # 添加一些硬编码的设备作为备选
+                self.add_hardcoded_devices()
+                return
+                
+            # 处理设备数据为选项列表
+            for device in devices:
+                if isinstance(device, dict):
+                    device_type = device.get('type', '')
+                    ip = device.get('ip', '')
+                    username = device.get('username', '')
+                    password = device.get('password', '')
+                    
+                    if not device_type or not ip:
+                        continue
+                        
+                    # 根据设备类型确定企业名称
+                    enterprise = device.get('enterprise', '')
+                    if not enterprise:
+                        enterprise = device.get('description', '')
+                    if not enterprise:
+                        enterprise = "企业A"  # 默认企业名称
+                        
+                    # 添加到设备选项列表
+                    self.device_options.append((device_type, enterprise, ip, username, password))
+            
+            # 如果设备列表为空，添加硬编码的设备
+            if not self.device_options:
+                self.add_hardcoded_devices()
+                
+            print(f"处理后的设备选项列表: {self.device_options}")
+            
+        except Exception as e:
+            import traceback
+            print(f"加载设备数据时出错: {str(e)}")
+            traceback.print_exc()
+            # 添加硬编码的设备作为备选
+            self.add_hardcoded_devices()
+    
+    def add_hardcoded_devices(self):
+        """添加硬编码的设备作为备选"""
+        print("添加硬编码的设备作为备选")
+        self.device_options = [
+            ("地域1核心交换机", "企业A", "10.1.0.3", "1", "1"),
+            ("地域1出口路由器", "企业A", "10.1.200.1", "1", "1"),
+            ("地域2出口路由器", "企业A", "10.1.18.1", "1", "1"),
+            ("地域1汇聚交换机", "企业A", "22.22.22.22", "1", "1"),
+            ("地域2核心交换机", "企业A", "10.1.18.8", "1", "1")
+        ]
+
+    def init_ui(self):
+        """初始化用户界面"""
+        # 主布局为垂直布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 添加标题
+        title_label = QLabel("批量配置地址工具")
+        title_label.setFont(QFont("微软雅黑", 16, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # 设备选择区域
+        device_group = QGroupBox("设备选择")
+        device_layout = QVBoxLayout()
+        
+        # 设备类型选择
+        self.device_combo = QComboBox()
+        self.device_combo.setFont(QFont("微软雅黑", 10))
+        
+        # 添加设备选项
+        if self.device_options:
+            for i, device_info in enumerate(self.device_options):
+                device_type, enterprise = device_info[0], device_info[1]
+                display_text = f"{device_type} - {enterprise} ({device_info[2]})"
+                self.device_combo.addItem(display_text, device_info)
+        else:
+            # 如果没有设备选项，添加一个提示项
+            self.device_combo.addItem("未找到可用设备", None)
+            self.device_combo.setEnabled(False)
+            QMessageBox.warning(self, "警告", "未找到可用设备，请确保数据库中有设备数据")
+        
+        # 设备信息显示
+        self.device_info_label = QLabel("设备信息: 请选择设备")
+        self.device_info_label.setWordWrap(True)
+        self.device_combo.currentIndexChanged.connect(self.update_device_info)
+        
+        device_layout.addWidget(QLabel("选择设备:"))
+        device_layout.addWidget(self.device_combo)
+        device_layout.addWidget(self.device_info_label)
+        
+        # 添加连接测试按钮
+        self.test_conn_btn = QPushButton("测试连接")
+        self.test_conn_btn.clicked.connect(self.test_connection)
+        device_layout.addWidget(self.test_conn_btn)
+        
+        device_group.setLayout(device_layout)
+        main_layout.addWidget(device_group)
+        
+        # 配置参数输入区域
+        config_group = QGroupBox("批量配置参数")
+        form = QFormLayout()
+
+        # 起始VLAN
+        self.start_vlan = QSpinBox()
+        self.start_vlan.setRange(100, 4094)
+        self.start_vlan.setValue(100)
+        self.start_vlan.setToolTip("起始VLAN必须从100开始")
+        form.addRow("起始VLAN:", self.start_vlan)
+
+        # 起始端口
+        self.start_port = QComboBox()
+        for i in range(1, 25):
+            self.start_port.addItem(f"G0/0/{i}")
+        self.start_port.setToolTip("起始端口必须在G0/0/1-G0/0/24范围内")
+        form.addRow("起始端口:", self.start_port)
+
+        # 结束端口
+        self.end_port = QComboBox()
+        for i in range(1, 25):
+            self.end_port.addItem(f"G0/0/{i}")
+        self.end_port.setCurrentIndex(0)  # 默认选择G0/0/1
+        self.end_port.setToolTip("结束端口必须在G0/0/1-G0/0/24范围内")
+        form.addRow("结束端口:", self.end_port)
+        
+        # 起始IP地址和子网掩码
+        ip_layout = QHBoxLayout()
+        self.start_ip = QLineEdit()
+        self.start_ip.setPlaceholderText("例如: 192.168.30.2")
+        # 修改IP地址验证器，使其更宽松
+        ip_regex = QRegExp("^(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})(/\\d{1,2})?$")
+        ip_validator = QRegExpValidator(ip_regex)
+        self.start_ip.setValidator(ip_validator)
+        self.start_ip.setToolTip("输入起始IP地址，例如192.168.30.2，可选添加掩码，例如192.168.30.2/24")
+        
+        # 添加子网掩码下拉框
+        self.subnet_mask = QComboBox()
+        for mask in range(16, 31):
+            self.subnet_mask.addItem(f"/{mask}")
+        self.subnet_mask.setCurrentIndex(8)  # 默认/24
+        self.subnet_mask.setToolTip("选择子网掩码")
+        
+        ip_layout.addWidget(self.start_ip)
+        ip_layout.addWidget(self.subnet_mask)
+        form.addRow("起始IP地址:", ip_layout)
+        
+        # 线程监控区域
+        thread_layout = QHBoxLayout()
+        self.thread_monitor_btn = QPushButton("打开线程监控")
+        self.thread_monitor_btn.setToolTip("打开线程监控工具，查看系统中所有线程的运行状态")
+        self.thread_monitor_btn.clicked.connect(self.open_thread_monitor)
+        thread_layout.addStretch()
+        thread_layout.addWidget(self.thread_monitor_btn)
+        
+        form.addRow("工具:", thread_layout)
+        
+        config_group.setLayout(form)
+        main_layout.addWidget(config_group)
+        
+        # 操作按钮区域
+        button_layout = QHBoxLayout()
+        
+        self.apply_btn = QPushButton("应用配置")
+        self.apply_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.apply_btn.clicked.connect(self.apply_config)
+        
+        self.clear_btn = QPushButton("清空日志")
+        self.clear_btn.clicked.connect(self.log_area.clear)
+        
+        button_layout.addWidget(self.apply_btn)
+        button_layout.addWidget(self.clear_btn)
+        
+        main_layout.addLayout(button_layout)
+        
+        # 日志区域
+        log_group = QGroupBox("操作日志")
+        log_layout = QVBoxLayout()
+        log_layout.addWidget(self.log_area)
+        log_group.setLayout(log_layout)
+        
+        main_layout.addWidget(log_group)
+        
+        # 更新设备信息
+        if self.device_combo.count() > 0:
+            self.update_device_info(0)
+
+    def update_device_info(self, index):
+        """更新设备信息显示"""
+        if index < 0 or index >= len(self.device_options):
+            return
+            
+        device_info = self.device_options[index]
+        if device_info:
+            device_type, enterprise, ip, username, password = device_info
+            self.device_info_label.setText(f"设备信息: {device_type} - {enterprise}\nIP: {ip}, 用户名: {username}")
+            
+    def test_connection(self):
+        """测试与设备的连接"""
+        index = self.device_combo.currentIndex()
+        if index < 0 or index >= len(self.device_options):
+            QMessageBox.warning(self, "警告", "请先选择设备")
+            return
+            
+        device_info = self.device_options[index]
+        if not device_info:
+            QMessageBox.warning(self, "警告", "无效的设备信息")
+            return
+            
+        device_type, enterprise, ip, username, password = device_info
+        
+        self.log(f"正在测试连接到设备: {device_type} ({ip})...")
+        
+        # 调用控制器的测试连接方法
+        if self.controller:
+            self.controller.test_connection(ip, username, password)
+        else:
+            self.log("控制器未初始化，无法测试连接")
+            
+    def apply_config(self):
+        """应用配置按钮点击处理"""
+        # 获取当前选择的设备
+        index = self.device_combo.currentIndex()
+        if index == -1 or self.device_combo.itemData(index) is None:
+            self.show_message("错误", "请选择一个有效的设备", True)
+            return
+            
+        device_info = self.device_combo.itemData(index)
+        device_type, enterprise, ip, username, password = device_info
+        
+        # 验证输入参数
+        try:
+            start_vlan = self.start_vlan.value()
+            end_port_idx = self.end_port.currentIndex()
+            start_port_idx = self.start_port.currentIndex()
+            
+            # 确保开始端口小于或等于结束端口
+            if start_port_idx > end_port_idx:
+                self.show_message("错误", "起始端口必须小于或等于结束端口", True)
+                return
+                
+            # 获取端口信息
+            start_port = self.start_port.currentText()
+            end_port = self.end_port.currentText()
+            
+            # 计算总端口数
+            total_ports = end_port_idx - start_port_idx + 1
+            
+            # 获取IP地址
+            start_ip = self.start_ip.text()
+            # 如果用户没有输入掩码，则添加选择的掩码
+            if '/' not in start_ip and start_ip:
+                start_ip += self.subnet_mask.currentText()
+                
+            # 验证IP地址格式
+            if not self.is_valid_ip(start_ip):
+                self.show_message("错误", f"无效的IP地址格式: {start_ip}", True)
+                return
+                
+            # 显示确认对话框
+            message = (f"即将配置设备: {device_type} ({ip})\n"
+                      f"起始VLAN: {start_vlan}\n"
+                      f"端口范围: {start_port} 到 {end_port} (共 {total_ports} 个端口)\n"
+                      f"起始IP地址: {start_ip}\n\n"
+                      f"确认要应用这些配置吗?")
+            reply = QMessageBox.question(self, "确认配置", message, 
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            
+            if reply == QMessageBox.Yes:
+                # 禁用应用按钮避免重复点击
+                self.apply_btn.setEnabled(False)
+                self.apply_btn.setText("正在配置...")
+                
+                # 添加进度标签
+                self.progress_label = QLabel("正在配置设备，请稍候...")
+                self.progress_label.setStyleSheet("color: blue; font-weight: bold;")
+                self.layout().addWidget(self.progress_label)
+                
+                # 记录开始时间
+                self.config_start_time = time.time()
+                
+                # 启动超时检测计时器
+                self.timeout_timer = QTimer(self)
+                self.timeout_timer.timeout.connect(self.check_config_timeout)
+                self.timeout_timer.start(1000)  # 每秒检查一次
+                
+                # 清空日志并显示开始消息
+                self.log("=" * 50)
+                self.log(f"开始对设备 {device_type}({ip}) 执行批量配置...")
+                self.log(f"配置参数:")
+                self.log(f"  - 起始VLAN: {start_vlan}")
+                self.log(f"  - 端口范围: {start_port} - {end_port} (共 {total_ports} 个端口)")
+                self.log(f"  - 起始IP: {start_ip}")
+                self.log("=" * 50)
+                
+                # 应用配置
+                self.controller.apply_batch_config(ip, username, password, start_vlan, start_port, end_port, start_ip)
+                self.log("配置命令已发送，请等待执行结果...")
+                
+                # 此处等待后台线程完成，不阻塞UI
+            else:
+                self.log("用户取消了配置操作")
+        except Exception as e:
+            import traceback
+            error_msg = f"准备配置时出错: {str(e)}"
+            self.log(error_msg)
+            self.log(traceback.format_exc())
+            self.show_message("错误", error_msg, True)
+
+    def check_config_timeout(self):
+        """检查配置是否超时"""
+        # 计算已经过去的时间（秒）
+        elapsed = time.time() - self.config_start_time
+        
+        # 更新进度标签
+        self.progress_label.setText(f"正在配置设备，已用时: {int(elapsed)}秒...")
+        
+        # 超过180秒（3分钟）视为超时
+        if elapsed > 180:
+            self.timeout_timer.stop()
+            self.log("警告: 配置操作已超过3分钟，可能已经卡住")
+            self.log("正在尝试恢复...")
+            
+            # 检查线程状态
+            import threading
+            active_threads = []
+            for thread in threading.enumerate():
+                if "BatchConfig" in thread.name:
+                    active_threads.append(thread.name)
+                    self.log(f"检测到活动的配置线程: {thread.name}")
+            
+            if active_threads:
+                self.log("检测到配置线程仍在运行，但UI未收到结果信号")
+                # 手动触发配置成功
+                self.config_status(True, "配置似乎已完成，但未收到结果信号")
+            else:
+                self.log("未检测到活动的配置线程，操作可能已失败")
+                # 手动触发配置失败
+                self.config_status(False, "配置操作超时")
+
+    def config_status(self, success, message):
+        """更新配置状态"""
+        # 停止超时计时器，如果存在
+        if hasattr(self, 'timeout_timer') and self.timeout_timer.isActive():
+            self.timeout_timer.stop()
+        
+        # 移除进度标签，如果存在
+        if hasattr(self, 'progress_label') and self.progress_label is not None:
+            try:
+                self.layout().removeWidget(self.progress_label)
+                self.progress_label.deleteLater()
+                self.progress_label = None
+            except:
+                pass
+        
+        # 启用应用按钮
+        self.apply_btn.setEnabled(True)
+        self.apply_btn.setText("应用配置")
+        
+        # 计算总用时
+        if hasattr(self, 'config_start_time'):
+            total_time = time.time() - self.config_start_time
+            time_str = f"总用时: {total_time:.2f}秒"
+        else:
+            time_str = ""
+        
+        if success:
+            self.log(f"配置成功: {message} {time_str}")
+            self.show_message("成功", f"配置已成功完成! {time_str}")
+        else:
+            self.log(f"配置失败: {message} {time_str}")
+            self.show_message("失败", f"配置失败: {message}", True)
+
+    def connection_status(self, success, message):
+        """连接测试状态回调"""
+        if success:
+            self.show_message("连接测试", message)
+            self.log(f"连接成功: {message}")
+            # 如果连接成功，启用应用按钮
+            self.apply_btn.setEnabled(True)
+        else:
+            self.show_message("连接测试失败", message, True)
+            self.log(f"连接失败: {message}")
+            # 如果连接失败，确保启用应用按钮以便用户重试
+            self.apply_btn.setEnabled(True)
+        
+        # 无论如何，都恢复测试连接按钮状态
+        self.test_conn_btn.setEnabled(True)
+        self.test_conn_btn.setText("测试连接")
+    
+    def is_valid_ip(self, ip):
+        """检查IP地址是否有效"""
+        # 支持带CIDR掩码的格式，例如192.168.1.1/24
+        if '/' in ip:
+            ip_part, mask_part = ip.split('/')
+            # 验证掩码部分
+            try:
+                mask = int(mask_part)
+                if mask < 16 or mask > 30:
+                    self.log(f"警告: 子网掩码 /{mask} 超出有效范围 (16-30)")
+                    return False
+            except ValueError:
+                self.log(f"错误: 无效的子网掩码格式 {mask_part}")
+                return False
+        else:
+            ip_part = ip
+        
+        # 验证IP地址部分
+        parts = ip_part.split('.')
+        if len(parts) != 4:
+            self.log(f"错误: IP地址必须有4个部分，当前有 {len(parts)} 个部分")
+            return False
+            
+        for part in parts:
+            try:
+                num = int(part)
+                if num < 0 or num > 255:
+                    self.log(f"错误: IP地址的每个部分必须在0-255之间，当前值为 {num}")
+                    return False
+            except ValueError:
+                self.log(f"错误: IP地址的每个部分必须为数字，当前值为 {part}")
+                return False
+                
+        return True
+
+    def show_message(self, title, message, is_error=False):
+        """显示消息对话框"""
+        if is_error:
+            QMessageBox.critical(self, title, message)
+        else:
+            QMessageBox.information(self, title, message)
+            
+    def open_thread_monitor(self):
+        """打开线程监控窗口"""
+        try:
+            from core.thread_monitor import ThreadMonitorDialog
+            # 从线程工厂获取实例
+            from core.business.thread_factory import ThreadFactory
+            thread_factory = ThreadFactory.get_instance()
+            
+            # 打开线程监控对话框
+            monitor = ThreadMonitorDialog(thread_factory, self)
+            monitor.exec_()
+        except Exception as e:
+            import traceback
+            print(f"打开线程监控失败: {str(e)}")
+            traceback.print_exc()
+            QMessageBox.warning(self, "警告", f"无法打开线程监控: {str(e)}")

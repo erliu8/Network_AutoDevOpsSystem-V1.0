@@ -1,0 +1,31 @@
+
+
+
+Login authentication
+
+
+Username:********
+Password:
+Info: The max number of VTY users is 5, and the number
+      of current VTY users on line is ********.
+      The current login time is 2025-04-30 ********9:27:40.
+<LSW********>
+<LSW********>
+<LSW********>screen-length 0 temporary
+Info: The configuration takes effect on the current user terminal interface only.
+<LSW********>display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.****************0 (S5700 V200R00********C00)
+Copyright (c) 2000-20**************** HUAWEI TECH CO., LTD
+
+Quidway S5700-28C-HI Routing Switch uptime is 0 week, 0 day, ******** hour, 20 minutes
+<LSW********>system-view
+Enter system view, return user view with Ctrl+Z.
+[LSW********]ip pool zg889999
+Info:It's successful to create an IP address pool.
+[LSW********-ip-pool-zg889999]network ********92.********68.66.0 mask 255.255.255.0
+[LSW********-ip-pool-zg889999]excluded-ip-addres ********92.********68.66.2
+[LSW********-ip-pool-zg889999]quit
+[LSW********]quit
+<LSW********>
+<LSW********>quit

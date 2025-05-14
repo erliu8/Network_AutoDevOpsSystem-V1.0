@@ -1,0 +1,960 @@
+{% extends 'base.html' %}
+
+{% block title %}ACL、NAT和生成树配置 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">ACL、NAT和生成树批量自动配置</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="acl-tab" data-bs-toggle="tab" href="#acl" role="tab" aria-controls="acl" aria-selected="true">
+                            <i class="fas fa-shield-alt me-1"></i> ACL配置
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nat-tab" data-bs-toggle="tab" href="#nat" role="tab" aria-controls="nat" aria-selected="false">
+                            <i class="fas fa-exchange-alt me-1"></i> NAT配置
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="stp-tab" data-bs-toggle="tab" href="#stp" role="tab" aria-controls="stp" aria-selected="false">
+                            <i class="fas fa-project-diagram me-1"></i> 生成树配置
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    <!-- ACL配置选项卡 -->
+                    <div class="tab-pane fade show active" id="acl" role="tabpanel" aria-labelledby="acl-tab">
+                        <form id="aclConfigForm">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="aclDeviceSelect" class="form-label">选择设备</label>
+                                    <select class="form-select" id="aclDeviceSelect" name="device_ids" multiple required>
+                                        {% for device in devices %}
+                                        <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">按住Ctrl键可多选</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="aclType" class="form-label">ACL类型</label>
+                                    <select class="form-select" id="aclType" name="acl_type" required>
+                                        <option value="standard">标准ACL</option>
+                                        <option value="extended">扩展ACL</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="aclId" class="form-label">ACL ID/名称</label>
+                                    <input type="text" class="form-control" id="aclId" name="acl_id" placeholder="例如：100 或 BLOCK_WEB" required>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>ACL规则</span>
+                                        <button type="button" class="btn btn-sm btn-primary" id="addAclRuleBtn">添加规则</button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="aclRulesContainer">
+                                        <!-- 标准ACL规则模板 -->
+                                        <div class="standard-acl-rule-template d-none">
+                                            <div class="acl-rule mb-3 border-bottom pb-3">
+                                                <div class="row">
+                                                    <div class="col-md-3">
+                                                        <label class="form-label">动作</label>
+                                                        <select class="form-select acl-action">
+                                                            <option value="permit">允许(permit)</option>
+                                                            <option value="deny">拒绝(deny)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-7">
+                                                        <label class="form-label">源地址</label>
+                                                        <input type="text" class="form-control acl-source" placeholder="例如：192.168.1.0 0.0.0.255 或 any">
+                                                    </div>
+                                                    <div class="col-md-2 d-flex align-items-end">
+                                                        <button type="button" class="btn btn-danger remove-rule-btn">删除</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 扩展ACL规则模板 -->
+                                        <div class="extended-acl-rule-template d-none">
+                                            <div class="acl-rule mb-3 border-bottom pb-3">
+                                                <div class="row">
+                                                    <div class="col-md-2">
+                                                        <label class="form-label">动作</label>
+                                                        <select class="form-select acl-action">
+                                                            <option value="permit">允许</option>
+                                                            <option value="deny">拒绝</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label">协议</label>
+                                                        <select class="form-select acl-protocol">
+                                                            <option value="ip">IP</option>
+                                                            <option value="tcp">TCP</option>
+                                                            <option value="udp">UDP</option>
+                                                            <option value="icmp">ICMP</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                       <label class="form-label">源地址</label>
+                                                        <input type="text" class="form-control acl-source" placeholder="例如：192.168.1.0 0.0.0.255 或 any">
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <label class="form-label">目标地址</label>
+                                                        <input type="text" class="form-control acl-destination" placeholder="例如：10.0.0.0 0.255.255.255 或 any">
+                                                    </div>
+                                                    <div class="col-md-1">
+                                                        <label class="form-label">端口</label>
+                                                        <input type="text" class="form-control acl-port" placeholder="例如：80">
+                                                    </div>
+                                                    <div class="col-md-1 d-flex align-items-end">
+                                                        <button type="button" class="btn btn-danger remove-rule-btn">删除</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 默认第一条规则 -->
+                                        <div id="aclRulesList">
+                                            <!-- 动态添加规则 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>将ACL应用到接口</span>
+                                        <button type="button" class="btn btn-sm btn-primary" id="addAclInterfaceBtn">添加接口</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="aclInterfacesContainer">
+                                    <div id="aclInterfacesList">
+                                        <!-- 动态添加接口 -->
+                                    </div>
+
+                                    <!-- 接口模板 -->
+                                    <div class="acl-interface-template d-none">
+                                        <div class="acl-interface mb-3 border-bottom pb-3">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">接口名称</label>
+                                                    <input type="text" class="form-control acl-interface-name" placeholder="例如：GigabitEthernet0/1">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">应用方向</label>
+                                                    <select class="form-select acl-direction">
+                                                        <option value="in">入站(in)</option>
+                                                        <option value="out">出站(out)</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-2 d-flex align-items-end">
+                                                    <button type="button" class="btn btn-danger remove-interface-btn">删除</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                <button type="submit" class="btn btn-primary">应用ACL配置</button>
+                            </div>
+                        </form>
+
+                        <div id="aclResultArea" class="mt-4" style="display: none;">
+                            <h5>配置结果：</h5>
+                            <div id="aclResultContent"></div>
+                        </div>
+                    </div>
+
+                    <!-- NAT配置选项卡 -->
+                    <div class="tab-pane fade" id="nat" role="tabpanel" aria-labelledby="nat-tab">
+                        <form id="natConfigForm">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="natDeviceSelect" class="form-label">选择设备</label>
+                                    <select class="form-select" id="natDeviceSelect" name="device_ids" multiple required>
+                                        {% for device in devices %}
+                                        <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">按住Ctrl键可多选</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="natType" class="form-label">NAT类型</label>
+                                    <select class="form-select" id="natType" name="nat_type" required>
+                                        <option value="static">静态NAT</option>
+                                        <option value="dynamic">动态NAT</option>
+                                        <option value="pat">端口地址转换(PAT)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span>内部接口</span>
+                                                <button type="button" class="btn btn-sm btn-primary" id="addNatInsideInterfaceBtn">添加接口</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body" id="natInsideInterfacesContainer">
+                                            <div id="natInsideInterfacesList">
+                                                <!-- 动态添加内部接口 -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span>外部接口</span>
+                                                <button type="button" class="btn btn-sm btn-primary" id="addNatOutsideInterfaceBtn">添加接口</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body" id="natOutsideInterfacesContainer">
+                                            <div id="natOutsideInterfacesList">
+                                                <!-- 动态添加外部接口 -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- NAT配置内容 -->
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <span>NAT配置详情</span>
+                                </div>
+                                <div class="card-body">
+                                    <!-- 静态NAT配置 -->
+                                    <div id="staticNatConfig" class="nat-config-section">
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span>静态NAT映射</span>
+                                                <button type="button" class="btn btn-sm btn-primary" id="addStaticNatBtn">添加映射</button>
+                                            </div>
+                                            <div id="staticNatMappingList">
+                                                <!-- 动态添加静态NAT映射 -->
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 动态NAT配置 -->
+                                    <div id="dynamicNatConfig" class="nat-config-section d-none">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="natPoolName" class="form-label">NAT池名称</label>
+                                                <input type="text" class="form-control" id="natPoolName" name="nat_pool_name" placeholder="例如：NATPOOL">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="natAclId" class="form-label">访问控制列表ID</label>
+                                                <input type="text" class="form-control" id="natAclId" name="nat_acl_id" placeholder="例如：10">
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-md-4">
+                                                <label for="natStartIp" class="form-label">起始IP地址</label>
+                                                <input type="text" class="form-control" id="natStartIp" name="nat_start_ip" placeholder="例如：200.1.1.10">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="natEndIp" class="form-label">结束IP地址</label>
+                                                <input type="text" class="form-control" id="natEndIp" name="nat_end_ip" placeholder="例如：200.1.1.20">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="natNetmask" class="form-label">子网掩码</label>
+                                                <input type="text" class="form-control" id="natNetmask" name="nat_netmask" placeholder="例如：255.255.255.0">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- PAT配置 -->
+                                    <div id="patConfig" class="nat-config-section d-none">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="patAclId" class="form-label">访问控制列表ID</label>
+                                                <input type="text" class="form-control" id="patAclId" name="pat_acl_id" placeholder="例如：10">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="patInterface" class="form-label">出口接口</label>
+                                                <input type="text" class="form-control" id="patInterface" name="pat_interface" placeholder="例如：GigabitEthernet0/1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                <button type="submit" class="btn btn-primary">应用NAT配置</button>
+                            </div>
+                        </form>
+
+                        <div id="natResultArea" class="mt-4" style="display: none;">
+                            <h5>配置结果：</h5>
+                            <div id="natResultContent"></div>
+                        </div>
+                    </div>
+
+                    <!-- 生成树配置选项卡 -->
+                    <div class="tab-pane fade" id="stp" role="tabpanel" aria-labelledby="stp-tab">
+                        <form id="stpConfigForm">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="stpDeviceSelect" class="form-label">选择设备</label>
+                                    <select class="form-select" id="stpDeviceSelect" name="device_ids" multiple required>
+                                        {% for device in devices %}
+                                        <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">按住Ctrl键可多选</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="stpMode" class="form-label">生成树模式</label>
+                                    <select class="form-select" id="stpMode" name="stp_mode" required>
+                                        <option value="pvst">PVST</option>
+                                        <option value="rapid-pvst">Rapid PVST</option>
+                                        <option value="mst">MST</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="stpPriority" class="form-label">生成树优先级</label>
+                                    <select class="form-select" id="stpPriority" name="stp_priority">
+                                        <option value="">默认</option>
+                                        <option value="0">0 (根桥)</option>
+                                        <option value="4096">4096</option>
+                                        <option value="8192">8192</option>
+                                        <option value="12288">12288</option>
+                                        <option value="16384">16384</option>
+                                        <option value="20480">20480</option>
+                                        <option value="24576">24576</option>
+                                        <option value="28672">28672</option>
+                                        <option value="32768">32768 (默认值)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="stpVlans" class="form-label">应用的VLAN范围</label>
+                                    <input type="text" class="form-control" id="stpVlans" name="vlans" placeholder="例如：1-10,20,30-40">
+                                </div>
+                                <div class="col-md-6" id="mstInstanceContainer" style="display: none;">
+                                    <label for="mstInstances" class="form-label">MST实例列表</label>
+                                    <input type="text" class="form-control" id="mstInstances" name="mst_instances" placeholder="例如：0,1,2">
+                                </div>
+                            </div>
+
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <span>额外保护配置</span>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableRootGuard" name="root_guard">
+                                                <label class="form-check-label" for="enableRootGuard">
+                                                    启用根保护
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableBpduGuard" name="bpdu_guard">
+                                                <label class="form-check-label" for="enableBpduGuard">
+                                                    启用BPDU保护
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enablePortfast" name="portfast">
+                                                <label class="form-check-label" for="enablePortfast">
+                                                    启用PortFast/边缘端口
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="rootGuardConfig" class="mb-3 protection-config" style="display: none;">
+                                        <label class="form-label">根保护接口</label>
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control" id="rootGuardInterfaces" name="root_guard_interfaces" placeholder="例如：GigabitEthernet0/1,GigabitEthernet0/2">
+                                        </div>
+                                    </div>
+
+                                    <div id="bpduGuardConfig" class="mb-3 protection-config" style="display: none;">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="bpduGuardGlobal" name="bpdu_guard_global">
+                                            <label class="form-check-label" for="bpduGuardGlobal">
+                                                全局启用BPDU保护
+                                            </label>
+                                        </div>
+                                        <label class="form-label">BPDU保护接口</label>
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control" id="bpduGuardInterfaces" name="bpdu_guard_interfaces" placeholder="例如：GigabitEthernet0/1,GigabitEthernet0/2">
+                                        </div>
+                                    </div>
+
+                                    <div id="portfastConfig" class="mb-3 protection-config" style="display: none;">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="portfastGlobal" name="portfast_global">
+                                            <label class="form-check-label" for="portfastGlobal">
+                                                全局启用PortFast
+                                            </label>
+                                        </div>
+                                        <label class="form-label">PortFast接口</label>
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control" id="portfastInterfaces" name="portfast_interfaces" placeholder="例如：GigabitEthernet0/1,GigabitEthernet0/2">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                <button type="submit" class="btn btn-primary">应用生成树配置</button>
+                            </div>
+                        </form>
+
+                        <div id="stpResultArea" class="mt-4" style="display: none;">
+                            <h5>配置结果：</h5>
+                            <div id="stpResultContent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // ====== ACL配置相关JavaScript ======
+        // 处理ACL类型切换
+        $('#aclType').change(function() {
+            const aclType = $(this).val();
+            $('#aclRulesList').empty(); // 清空已有规则
+
+            // 默认添加一条规则
+            addAclRule();
+        });
+
+        // 初始默认添加一条规则
+        function addAclRule() {
+            const aclType = $('#aclType').val();
+            const ruleTemplate = aclType === 'standard' ?
+                $('.standard-acl-rule-template > div').clone() :
+                $('.extended-acl-rule-template > div').clone();
+
+            ruleTemplate.removeClass('d-none');
+            $('#aclRulesList').append(ruleTemplate);
+        }
+
+        // 添加规则按钮
+        $('#addAclRuleBtn').click(function() {
+            addAclRule();
+        });
+
+        // 添加接口按钮
+        $('#addAclInterfaceBtn').click(function() {
+            const interfaceTemplate = $('.acl-interface-template > div').clone();
+            interfaceTemplate.removeClass('d-none');
+            $('#aclInterfacesList').append(interfaceTemplate);
+        });
+
+        // 删除规则和接口
+        $(document).on('click', '.remove-rule-btn', function() {
+            $(this).closest('.acl-rule').remove();
+        });
+
+        $(document).on('click', '.remove-interface-btn', function() {
+            $(this).closest('.acl-interface').remove();
+        });
+
+        // ACL配置表单提交
+        $('#aclConfigForm').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            const deviceIds = $('#aclDeviceSelect').val();
+            const aclType = $('#aclType').val();
+            const aclId = $('#aclId').val();
+
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+
+            if (!aclId) {
+                alert('请输入ACL ID或名称');
+                return;
+            }
+
+            // 收集ACL规则
+            const aclRules = [];
+            $('#aclRulesList .acl-rule').each(function() {
+                const rule = {};
+                rule.action = $(this).find('.acl-action').val();
+                rule.source = $(this).find('.acl-source').val() || 'any';
+
+                if (aclType === 'extended') {
+                    rule.protocol = $(this).find('.acl-protocol').val();
+                    rule.destination = $(this).find('.acl-destination').val() || 'any';
+                    rule.port = $(this).find('.acl-port').val();
+                }
+
+                aclRules.push(rule);
+            });
+
+            // 收集应用接口
+            const applyInterfaces = [];
+            $('#aclInterfacesList .acl-interface').each(function() {
+                const interfaceName = $(this).find('.acl-interface-name').val();
+                const direction = $(this).find('.acl-direction').val();
+
+                if (interfaceName) {
+                    applyInterfaces.push({
+                        name: interfaceName,
+                        direction: direction
+                    });
+                }
+            });
+
+            // 显示加载提示
+            $('#aclResultContent').html('<div class="alert alert-info">正在应用ACL配置，请稍候...</div>');
+            $('#aclResultArea').show();
+
+            // 构建表单数据
+            const formData = new FormData();
+
+            // 添加设备ID
+            deviceIds.forEach(function(id) {
+                formData.append('device_ids', id);
+            });
+
+            formData.append('acl_type', aclType);
+            formData.append('acl_id', aclId);
+            formData.append('acl_rules', JSON.stringify(aclRules));
+            formData.append('apply_interfaces', JSON.stringify(applyInterfaces));
+
+            // 提交配置
+            $.ajax({
+                url: '/network/acl-config',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        let resultHtml = '<div class="alert alert-success">ACL配置成功应用到以下设备：</div>';
+                        resultHtml += '<ul class="list-group">';
+
+                        for (const [deviceName, result] of Object.entries(response.results)) {
+                            if (result.success) {
+                                resultHtml += `<li class="list-group-item list-group-item-success">${deviceName} - 成功</li>`;
+                            } else {
+                                resultHtml += `<li class="list-group-item list-group-item-danger">${deviceName} - 失败: ${result.error}</li>`;
+                            }
+                        }
+
+                        resultHtml += '</ul>';
+                        $('#aclResultContent').html(resultHtml);
+                    } else {
+                        $('#aclResultContent').html(`<div class="alert alert-danger">操作失败: ${response.error}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#aclResultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+                }
+            });
+        });
+
+        // ====== NAT配置相关JavaScript ======
+        // 显示不同NAT类型的配置部分
+        $('#natType').change(function() {
+            const natType = $(this).val();
+            $('.nat-config-section').addClass('d-none');
+
+            if (natType === 'static') {
+                $('#staticNatConfig').removeClass('d-none');
+            } else if (natType === 'dynamic') {
+                $('#dynamicNatConfig').removeClass('d-none');
+            } else if (natType === 'pat') {
+                $('#patConfig').removeClass('d-none');
+            }
+        });
+
+        // 添加内部接口
+        $('#addNatInsideInterfaceBtn').click(function() {
+            const html = `
+                <div class="nat-inside-interface mb-2">
+                    <div class="input-group">
+                        <input type="text" class="form-control nat-interface-name" placeholder="接口名称，例如：GigabitEthernet0/1">
+                        <button type="button" class="btn btn-danger remove-nat-interface-btn">删除</button>
+                    </div>
+                </div>
+            `;
+            $('#natInsideInterfacesList').append(html);
+        });
+
+        // 添加外部接口
+        $('#addNatOutsideInterfaceBtn').click(function() {
+            const html = `
+                <div class="nat-outside-interface mb-2">
+                    <div class="input-group">
+                        <input type="text" class="form-control nat-interface-name" placeholder="接口名称，例如：GigabitEthernet0/0">
+                        <button type="button" class="btn btn-danger remove-nat-interface-btn">删除</button>
+                    </div>
+                </div>
+            `;
+            $('#natOutsideInterfacesList').append(html);
+        });
+
+        // 删除NAT接口
+        $(document).on('click', '.remove-nat-interface-btn', function() {
+            $(this).closest('div[class^="nat-"]').remove();
+        });
+
+        // 添加静态NAT映射
+        $('#addStaticNatBtn').click(function() {
+            const html = `
+                <div class="static-nat-mapping mb-2">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control nat-inside-ip" placeholder="内部IP地址">
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" class="form-control nat-outside-ip" placeholder="外部IP地址">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-danger remove-static-nat-btn">删除</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            $('#staticNatMappingList').append(html);
+        });
+
+        // 删除静态NAT映射
+        $(document).on('click', '.remove-static-nat-btn', function() {
+            $(this).closest('.static-nat-mapping').remove();
+        });
+
+        // NAT配置表单提交
+        $('#natConfigForm').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            const deviceIds = $('#natDeviceSelect').val();
+            const natType = $('#natType').val();
+
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+
+            // 收集内部接口
+            const insideInterfaces = [];
+            $('#natInsideInterfacesList .nat-inside-interface').each(function() {
+                const interfaceName = $(this).find('.nat-interface-name').val();
+                if (interfaceName) {
+                    insideInterfaces.push(interfaceName);
+                }
+            });
+
+            // 收集外部接口
+            const outsideInterfaces = [];
+            $('#natOutsideInterfacesList .nat-outside-interface').each(function() {
+                const interfaceName = $(this).find('.nat-interface-name').val();
+                if (interfaceName) {
+                    outsideInterfaces.push(interfaceName);
+                }
+            });
+
+            if (insideInterfaces.length === 0) {
+                alert('请添加至少一个内部接口');
+                return;
+            }
+
+            if (outsideInterfaces.length === 0) {
+                alert('请添加至少一个外部接口');
+                return;
+            }
+
+            // 根据NAT类型收集特定配置
+            let natConfig = {};
+
+            if (natType === 'static') {
+                // 收集静态NAT映射
+                const staticMappings = [];
+                $('#staticNatMappingList .static-nat-mapping').each(function() {
+                    const insideIp = $(this).find('.nat-inside-ip').val();
+                    const outsideIp = $(this).find('.nat-outside-ip').val();
+
+                    if (insideIp && outsideIp) {
+                        staticMappings.push({
+                            inside_ip: insideIp,
+                            outside_ip: outsideIp
+                        });
+                    }
+                });
+
+                if (staticMappings.length === 0) {
+                    alert('请添加至少一个静态NAT映射');
+                    return;
+                }
+
+                natConfig = staticMappings;
+            } else if (natType === 'dynamic') {
+                // 收集动态NAT配置
+                const poolName = $('#natPoolName').val();
+                const aclId = $('#natAclId').val();
+                const startIp = $('#natStartIp').val();
+                const endIp = $('#natEndIp').val();
+                const netmask = $('#natNetmask').val();
+
+                if (!poolName || !aclId || !startIp || !endIp || !netmask) {
+                    alert('请填写完整的动态NAT配置');
+                    return;
+                }
+
+                natConfig = {
+                    pool_name: poolName,
+                    acl_id: aclId,
+                    start_ip: startIp,
+                    end_ip: endIp,
+                    netmask: netmask
+                };
+            } else if (natType === 'pat') {
+                // 收集PAT配置
+                const aclId = $('#patAclId').val();
+                const patInterface = $('#patInterface').val();
+
+                if (!aclId || !patInterface) {
+                    alert('请填写完整的PAT配置');
+                    return;
+                }
+
+                natConfig = {
+                    acl_id: aclId,
+                    interface: patInterface
+                };
+            }
+
+            // 显示加载提示
+            $('#natResultContent').html('<div class="alert alert-info">正在应用NAT配置，请稍候...</div>');
+            $('#natResultArea').show();
+
+            // 构建表单数据
+            const formData = new FormData();
+
+            // 添加设备ID
+            deviceIds.forEach(function(id) {
+                formData.append('device_ids', id);
+            });
+
+            formData.append('nat_type', natType);
+            formData.append('inside_interfaces', JSON.stringify(insideInterfaces));
+            formData.append('outside_interfaces', JSON.stringify(outsideInterfaces));
+            formData.append('nat_config', JSON.stringify(natConfig));
+
+            // 提交配置
+            $.ajax({
+                url: '/network/nat-config',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        let resultHtml = '<div class="alert alert-success">NAT配置成功应用到以下设备：</div>';
+                        resultHtml += '<ul class="list-group">';
+
+                        for (const [deviceName, result] of Object.entries(response.results)) {
+                            if (result.success) {
+                                resultHtml += `<li class="list-group-item list-group-item-success">${deviceName} - 成功</li>`;
+                            } else {
+                                resultHtml += `<li class="list-group-item list-group-item-danger">${deviceName} - 失败: ${result.error}</li>`;
+                            }
+                        }
+
+                        resultHtml += '</ul>';
+                        $('#natResultContent').html(resultHtml);
+                    } else {
+                        $('#natResultContent').html(`<div class="alert alert-danger">操作失败: ${response.error}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#natResultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+                }
+            });
+        });
+
+        // ====== 生成树配置相关JavaScript ======
+        // MST模式下显示额外配置项
+        $('#stpMode').change(function() {
+            const stpMode = $(this).val();
+
+            if (stpMode === 'mst') {
+                $('#mstInstanceContainer').show();
+            } else {
+                $('#mstInstanceContainer').hide();
+            }
+        });
+
+        // 显示/隐藏保护配置选项
+        $('#enableRootGuard').change(function() {
+            if ($(this).is(':checked')) {
+                $('#rootGuardConfig').show();
+            } else {
+                $('#rootGuardConfig').hide();
+            }
+        });
+
+        $('#enableBpduGuard').change(function() {
+            if ($(this).is(':checked')) {
+                $('#bpduGuardConfig').show();
+            } else {
+                $('#bpduGuardConfig').hide();
+            }
+        });
+
+        $('#enablePortfast').change(function() {
+            if ($(this).is(':checked')) {
+                $('#portfastConfig').show();
+            } else {
+                $('#portfastConfig').hide();
+            }
+        });
+
+        // 生成树配置表单提交
+        $('#stpConfigForm').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            const deviceIds = $('#stpDeviceSelect').val();
+            const stpMode = $('#stpMode').val();
+
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+
+            // 收集表单数据
+            const stpPriority = $('#stpPriority').val();
+            const vlans = $('#stpVlans').val();
+
+            // 收集保护配置
+            const additionalParams = {};
+
+            // 根保护
+            if ($('#enableRootGuard').is(':checked')) {
+                additionalParams.root_guard = true;
+                additionalParams.root_guard_interfaces = $('#rootGuardInterfaces').val().split(',').map(item => item.trim()).filter(item => item);
+            }
+
+            // BPDU保护
+            if ($('#enableBpduGuard').is(':checked')) {
+                additionalParams.bpdu_guard = true;
+                additionalParams.bpdu_guard_global = $('#bpduGuardGlobal').is(':checked');
+                additionalParams.bpdu_guard_interfaces = $('#bpduGuardInterfaces').val().split(',').map(item => item.trim()).filter(item => item);
+            }
+
+            // PortFast
+            if ($('#enablePortfast').is(':checked')) {
+                additionalParams.portfast = true;
+                additionalParams.portfast_global = $('#portfastGlobal').is(':checked');
+                additionalParams.portfast_interfaces = $('#portfastInterfaces').val().split(',').map(item => item.trim()).filter(item => item);
+            }
+
+            // MST实例
+            if (stpMode === 'mst') {
+                additionalParams.mst_instances = $('#mstInstances').val().split(',').map(item => item.trim()).filter(item => item);
+            }
+
+            // 显示加载提示
+            $('#stpResultContent').html('<div class="alert alert-info">正在应用生成树配置，请稍候...</div>');
+            $('#stpResultArea').show();
+
+            // 构建表单数据
+            const formData = new FormData();
+
+            // 添加设备ID
+            deviceIds.forEach(function(id) {
+                formData.append('device_ids', id);
+            });
+
+            formData.append('stp_mode', stpMode);
+
+            if (stpPriority) {
+                formData.append('stp_priority', stpPriority);
+            }
+
+            if (vlans) {
+                formData.append('vlans', vlans);
+            }
+
+            formData.append('additional_params', JSON.stringify(additionalParams));
+
+            // 提交配置
+            $.ajax({
+                url: '/network/stp-config',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        let resultHtml = '<div class="alert alert-success">生成树配置成功应用到以下设备：</div>';
+                        resultHtml += '<ul class="list-group">';
+
+                        for (const [deviceName, result] of Object.entries(response.results)) {
+                            if (result.success) {
+                                resultHtml += `<li class="list-group-item list-group-item-success">${deviceName} - 成功</li>`;
+                            } else {
+                                resultHtml += `<li class="list-group-item list-group-item-danger">${deviceName} - 失败: ${result.error}</li>`;
+                            }
+                        }
+
+                        resultHtml += '</ul>';
+                        $('#stpResultContent').html(resultHtml);
+                    } else {
+                        $('#stpResultContent').html(`<div class="alert alert-danger">操作失败: ${response.error}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#stpResultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+                }
+            });
+        });
+
+        // 初始化
+        $('#natType').trigger('change'); // 触发NAT类型切换
+        $('#addAclRuleBtn').trigger('click'); // 添加默认ACL规则
+        $('#addStaticNatBtn').trigger('click'); // 添加默认静态NAT映射
+        $('#addNatInsideInterfaceBtn').trigger('click'); // 添加默认内部接口
+        $('#addNatOutsideInterfaceBtn').trigger('click'); // 添加默认外部接口
+    });
+</script>
+{% endblock %}

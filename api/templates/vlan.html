@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+
+{% block title %}VLAN配置 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">VLAN配置</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-project-diagram me-1"></i>
+                VLAN配置
+            </div>
+            <div class="card-body">
+                <form id="vlanForm">
+                    <div class="mb-3">
+                        <label for="deviceSelect" class="form-label">选择设备</label>
+                        <select class="form-select" id="deviceSelect" name="device_ids" multiple required>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">按住Ctrl键可多选</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vlanId" class="form-label">VLAN ID</label>
+                        <input type="number" class="form-control" id="vlanId" name="vlan_id" min="1" max="4094" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vlanName" class="form-label">VLAN名称</label>
+                        <input type="text" class="form-control" id="vlanName" name="vlan_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="interfaces" class="form-label">接口列表（可选）</label>
+                        <input type="text" class="form-control" id="interfaces" name="interfaces" placeholder="例如: GigabitEthernet0/1, GigabitEthernet0/2">
+                        <div class="form-text">配置为接入模式的接口，多个接口用逗号分隔</div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" id="previewBtn" class="btn btn-secondary me-md-2">预览配置</button>
+                        <button type="submit" class="btn btn-primary">应用配置</button>
+                        <button type="button" id="viewConfigBtn" class="btn btn-info">查看VLAN配置</button>
+                    </div>
+                </form>
+
+                <div id="resultArea" class="mt-4" style="display: none;">
+                    <h5>配置结果：</h5>
+                    <div id="resultContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="previewModalLabel">配置预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="previewContent" class="bg-light p-3"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 预览配置
+        $('#previewBtn').click(function() {
+            const vlanId = $('#vlanId').val();
+            const vlanName = $('#vlanName').val();
+            const interfaces = $('#interfaces').val();
+
+            if (!vlanId || !vlanName) {
+                alert('请填写VLAN ID和VLAN名称');
+                return;
+            }
+
+            let previewText = `! VLAN配置命令预览\n`;
+            previewText += `vlan ${vlanId}\n`;
+            previewText += ` name ${vlanName}\n`;
+
+            if (interfaces) {
+                const interfaceList = interfaces.split(',').map(i => i.trim());
+                interfaceList.forEach(intf => {
+                    previewText += `!\ninterface ${intf}\n`;
+                    previewText += ` switchport mode access\n`;
+                    previewText += ` switchport access vlan ${vlanId}\n`;
+                });
+            }
+
+            $('#previewContent').text(previewText);
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            previewModal.show();
+        });
+
+        // 查看设备VLAN配置
+        $('#viewConfigBtn').click(function() {
+    const deviceIds = $('#deviceSelect').val();
+
+    if (!deviceIds || deviceIds.length === 0) {
+        alert('请选择至少一个设备');
+        return;
+    }
+
+    console.log("Fetching VLAN configuration for device ID:", deviceIds[0]);
+
+    // Request device VLAN configuration
+    $.ajax({
+        url: '/api/devices/' + deviceIds[0] + '/vlan-config',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                let configHtml = `<h5>已应用的VLAN配置:</h5>`;
+                configHtml += `<h6>VLAN配置:</h6><pre>${response.appliedConfig}</pre>`;
+                configHtml += `<h6>运行配置:</h6><pre>${response.runningConfig}</pre>`;
+                $('#resultContent').html(configHtml);
+                $('#resultArea').show();
+            } else {
+                $('#resultContent').html(`<div class="alert alert-danger">获取配置失败: ${response.error}</div>`);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.log("Error fetching VLAN configuration:", status, error);
+            $('#resultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+        }
+    });
+});
+
+        
+        // 提交表单
+        $('#vlanForm').submit(function(e) {
+            e.preventDefault();
+            
+            const form = $(this);
+            const deviceIds = $('#deviceSelect').val();
+            
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+            
+            $('#resultArea').hide();
+            
+            // 显示加载提示
+            $('#resultContent').html('<div class="alert alert-info">正在应用配置，请稍候...</div>');
+            $('#resultArea').show();
+            
+            // 提交配置
+            $.ajax({
+                url: '{{ url_for("vlan_management") }}',
+                method: 'POST',
+                data: form.serialize(),
+                success: function(response) {
+                    if (response.success) {
+                        let resultHtml = '<div class="alert alert-success">配置成功应用到以下设备：</div>';
+                        resultHtml += '<ul class="list-group">';
+                        
+                        for (const [hostname, result] of Object.entries(response.results)) {
+                            if (result.success) {
+                                resultHtml += `<li class="list-group-item list-group-item-success">${hostname} - 成功</li>`;
+                            } else {
+                                resultHtml += `<li class="list-group-item list-group-item-danger">${hostname} - 失败: ${result.error}</li>`;
+                            }
+                        }
+                        
+                        resultHtml += '</ul>';
+                        $('#resultContent').html(resultHtml);
+                    } else {
+                        $('#resultContent').html(`<div class="alert alert-danger">操作失败: ${response.error}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#resultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

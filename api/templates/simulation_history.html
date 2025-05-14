@@ -1,0 +1,353 @@
+{% extends 'base.html' %}
+
+{% block title %}模拟历史 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">模拟历史</h1>
+        <div>
+            <a href="{{ url_for('topology_simulation') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> 新建模拟
+            </a>
+            <a href="{{ url_for('simulation_templates') }}" class="btn btn-outline-secondary ms-2">
+                <i class="fas fa-file-code"></i> 模拟模板
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="fas fa-history me-1"></i>
+        模拟历史记录
+    </div>
+    <div class="card-body">
+        {% if history %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>名称</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in history %}
+                    <tr>
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.name }}</td>
+                        <td>
+                            {% if item.status == 'success' %}
+                            <span class="badge bg-success">成功</span>
+                            {% elif item.status == 'failure' %}
+                            <span class="badge bg-danger">失败</span>
+                            {% else %}
+                            <span class="badge bg-warning">进行中</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.created_at }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary viewResultBtn" data-id="{{ item.id }}">
+                                <i class="fas fa-eye"></i> 查看结果
+                            </button>
+                            {% if item.status == 'success' %}
+                            <button class="btn btn-sm btn-info exportBtn" data-id="{{ item.id }}">
+                                <i class="fas fa-download"></i> 导出
+                            </button>
+                            <button class="btn btn-sm btn-success rerunBtn" data-id="{{ item.id }}">
+                                <i class="fas fa-redo"></i> 重新运行
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-danger deleteHistoryBtn" data-id="{{ item.id }}">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> 暂无模拟历史记录，您可以点击"新建模拟"按钮创建新的模拟。
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 查看结果模态框 -->
+<div class="modal fade" id="viewResultModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">模拟结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">模拟名称</label>
+                            <input type="text" class="form-control" id="resultName" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">创建时间</label>
+                            <input type="text" class="form-control" id="resultDate" readonly>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">状态</label>
+                    <div id="resultStatus"></div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">模拟配置</label>
+                    <div class="card">
+                        <div class="card-body">
+                            <div id="simulationConfig"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">结果详情</label>
+                    <div class="card">
+                        <div class="card-body">
+                            <div id="simulationResult"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="resultExportDiv" class="mt-3">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 您可以导出此模拟配置到eNSP中。
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="modalExportBtn">导出配置</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认模态框 -->
+<div class="modal fade" id="deleteHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">删除确认</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除这条历史记录吗？此操作无法撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteHistoryBtn">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 初始化数据表格
+    if ($('#historyTable').length > 0) {
+        $('#historyTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.11.5/i18n/zh.json"
+            },
+            "order": [[3, "desc"]] // 按创建时间降序排序
+        });
+    }
+    
+    // 查看模拟结果
+    $('.viewResultBtn').click(function() {
+        const historyId = $(this).data('id');
+        
+        // 请求模拟结果详情
+        $.ajax({
+            url: `/api/topology/simulation/${historyId}/status`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    $('#resultName').val(response.name || '未命名');
+                    $('#resultDate').val(response.created_at || '未知');
+                    
+                    // 显示状态
+                    let statusHtml = '';
+                    if (response.status === 'success') {
+                        statusHtml = '<div class="alert alert-success">模拟成功完成</div>';
+                    } else if (response.status === 'failure') {
+                        statusHtml = `<div class="alert alert-danger">模拟失败: ${response.result?.error || '未知错误'}</div>`;
+                    } else {
+                        statusHtml = '<div class="alert alert-warning">模拟正在进行中</div>';
+                    }
+                    $('#resultStatus').html(statusHtml);
+                    
+                    // 显示配置信息
+                    const config = response.config || {};
+                    let configHtml = '<dl class="row mb-0">';
+                    
+                    configHtml += `<dt class="col-sm-3">设备数量:</dt><dd class="col-sm-9">${config.devices?.length || 0}</dd>`;
+                    configHtml += `<dt class="col-sm-3">连接数量:</dt><dd class="col-sm-9">${config.connections?.length || 0}</dd>`;
+                    
+                    if (config.template_name) {
+                        configHtml += `<dt class="col-sm-3">使用模板:</dt><dd class="col-sm-9">${config.template_name}</dd>`;
+                    }
+                    
+                    configHtml += '</dl>';
+                    $('#simulationConfig').html(configHtml);
+                    
+                    // 显示结果详情
+                    const result = response.result || {};
+                    let resultHtml = '';
+                    
+                    if (response.status === 'success') {
+                        resultHtml = `
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i> ${result.message || '模拟成功完成'}
+                            </div>
+                        `;
+                        
+                        if (result.project_file) {
+                            resultHtml += `<p><strong>项目文件:</strong> ${result.project_file}</p>`;
+                        }
+                        
+                        if (result.instructions) {
+                            resultHtml += `
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> <strong>使用说明:</strong><br>
+                                    ${result.instructions}
+                                </div>
+                            `;
+                        }
+                        
+                        // 显示导出选项
+                        $('#resultExportDiv').show();
+                        $('#modalExportBtn').show().data('id', historyId);
+                    } else if (response.status === 'failure') {
+                        resultHtml = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-circle"></i> 模拟失败: ${result.error || '未知错误'}
+                            </div>
+                        `;
+                        
+                        if (result.details) {
+                            resultHtml += `<pre class="bg-light p-3">${result.details}</pre>`;
+                        }
+                        
+                        // 隐藏导出选项
+                        $('#resultExportDiv').hide();
+                        $('#modalExportBtn').hide();
+                    } else {
+                        resultHtml = `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-spinner fa-spin"></i> 模拟正在进行中，请稍后查看结果。
+                            </div>
+                        `;
+                        
+                        // 隐藏导出选项
+                        $('#resultExportDiv').hide();
+                        $('#modalExportBtn').hide();
+                    }
+                    
+                    $('#simulationResult').html(resultHtml);
+                    
+                    // 显示模态框
+                    $('#viewResultModal').modal('show');
+                } else {
+                    alert('获取模拟结果失败：' + response.error);
+                }
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+            }
+        });
+    });
+    
+    // 导出模拟配置
+    $('.exportBtn, #modalExportBtn').click(function() {
+        const historyId = $(this).data('id');
+        
+        $.ajax({
+            url: `/api/topology/simulation/export/${historyId}`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    // 直接触发下载
+                    window.location.href = response.download_url;
+                } else {
+                    alert(`导出失败: ${response.error}`);
+                }
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+            }
+        });
+    });
+    
+    // 重新运行模拟
+    $('.rerunBtn').click(function() {
+        const historyId = $(this).data('id');
+        
+        $.ajax({
+            url: `/api/topology/simulation/${historyId}/rerun`,
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    alert('模拟已重新运行，即将跳转到模拟页面。');
+                    window.location.href = `/topology/simulation?simulation_id=${response.new_simulation_id}`;
+                } else {
+                    alert(`重新运行失败: ${response.error}`);
+                }
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+            }
+        });
+    });
+    
+    // 删除历史记录
+    $('.deleteHistoryBtn').click(function() {
+        const historyId = $(this).data('id');
+        $('#confirmDeleteHistoryBtn').data('id', historyId);
+        $('#deleteHistoryModal').modal('show');
+    });
+    
+    $('#confirmDeleteHistoryBtn').click(function() {
+        const historyId = $(this).data('id');
+        
+        $.ajax({
+            url: `/api/topology/simulation/${historyId}`,
+            method: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    alert('历史记录已成功删除');
+                    location.reload();
+                } else {
+                    alert('删除历史记录失败：' + response.error);
+                }
+                $('#deleteHistoryModal').modal('hide');
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+                $('#deleteHistoryModal').modal('hide');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

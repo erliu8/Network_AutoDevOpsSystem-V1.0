@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+
+{% block title %}应用配置模板 - {{ template.name }} - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">应用配置模板 - {{ template.name }}</h1>
+        <a href="{{ url_for('config_templates') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> 返回模板列表
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-info-circle me-1"></i>
+                模板信息
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">模板名称:</div>
+                    <div class="col-md-9">{{ template.name }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">设备类型:</div>
+                    <div class="col-md-9">{{ template.device_type }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">描述:</div>
+                    <div class="col-md-9">{{ template.description }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">创建时间:</div>
+                    <div class="col-md-9">{{ template.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12 fw-bold">模板内容:</div>
+                    <div class="col-12">
+                        <pre class="bg-light p-3 mt-2">{{ template.config_content }}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-cog me-1"></i>
+                应用模板
+            </div>
+            <div class="card-body">
+                <form id="applyTemplateForm">
+                    <div class="mb-3">
+                        <label for="deviceSelect" class="form-label">选择设备</label>
+                        <select class="form-select" id="deviceSelect" name="device_ids" multiple required>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">按住Ctrl键可多选</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="variablesArea" class="form-label">变量设置</label>
+                        <textarea class="form-control" id="variablesArea" name="variables" rows="5"></textarea>
+                        <div class="form-text">
+                            每行一个变量，格式为：变量名=变量值<br>
+                            例如：HOSTNAME=RouterA<br>
+                            适用于模板中使用${HOSTNAME}格式的变量
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" id="previewBtn" class="btn btn-secondary me-md-2">预览配置</button>
+                        <button type="submit" class="btn btn-primary">应用配置</button>
+                    </div>
+                </form>
+
+                <div id="resultArea" class="mt-4" style="display: none;">
+                    <h5>配置结果：</h5>
+                    <div id="resultContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="previewModalLabel">配置预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="previewContent" class="bg-light p-3"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 解析变量
+        function parseVariables(variablesText) {
+            const variables = {};
+            const lines = variablesText.split('\n');
+            
+            for (const line of lines) {
+                if (line.trim()) {
+                    const parts = line.split('=', 2);
+                    if (parts.length === 2) {
+                        variables[parts[0].trim()] = parts[1].trim();
+                    }
+                }
+            }
+            
+            return variables;
+        }
+        
+        // 应用变量替换模板内容
+        function applyVariables(templateContent, variables) {
+            let result = templateContent;
+            
+            for (const [name, value] of Object.entries(variables)) {
+                const regex = new RegExp('\\${' + name + '}', 'g');
+                result = result.replace(regex, value);
+            }
+            
+            return result;
+        }
+        
+        // 预览配置
+        $('#previewBtn').click(function() {
+            const templateContent = `{{ template.config_content|replace('\n', '\\n')|replace("'", "\\'") }}`;
+            const variablesText = $('#variablesArea').val();
+            const variables = parseVariables(variablesText);
+            
+            const previewContent = applyVariables(templateContent, variables);
+            
+            $('#previewContent').text(previewContent);
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            previewModal.show();
+        });
+        
+        // 提交表单
+        $('#applyTemplateForm').submit(function(e) {
+            e.preventDefault();
+            
+            const form = $(this);
+            const deviceIds = $('#deviceSelect').val();
+            
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+            
+            $('#resultArea').hide();
+            
+            // 显示加载提示
+            $('#resultContent').html('<div class="alert alert-info">正在应用配置，请稍候...</div>');
+            $('#resultArea').show();
+            
+            // 提交配置
+            $.ajax({
+                url: '{{ url_for("apply_template", template_id=template.id) }}',
+                method: 'POST',
+                data: form.serialize(),
+                success: function(response) {
+                    if (response.success) {
+                        let resultHtml = '<div class="alert alert-success">模板成功应用到以下设备：</div>';
+                        resultHtml += '<ul class="list-group">';
+                        
+                        for (const [hostname, result] of Object.entries(response.results)) {
+                            if (result.success) {
+                                resultHtml += `<li class="list-group-item list-group-item-success">${hostname} - 成功</li>`;
+                            } else {
+                                resultHtml += `<li class="list-group-item list-group-item-danger">${hostname} - 失败: ${result.error}</li>`;
+                            }
+                        }
+                        
+                        resultHtml += '</ul>';
+                        $('#resultContent').html(resultHtml);
+                    } else {
+                        $('#resultContent').html(`<div class="alert alert-danger">操作失败: ${response.error}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#resultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

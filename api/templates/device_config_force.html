@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}设备强制连接配置{% endblock %}
+
+{% block styles %}
+<style>
+.config-card {
+    transition: all 0.3s;
+    height: 100%;
+}
+.config-card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+.connection-status {
+    font-weight: bold;
+}
+.connection-success {
+    color: #28a745;
+}
+.connection-failure {
+    color: #dc3545;
+}
+.force-btn {
+    margin-left: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-3">
+                <i class="fas fa-plug me-2"></i>设备强制连接配置
+            </h1>
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                注意：强制连接可能会覆盖现有配置，请谨慎操作！
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-server me-2"></i>设备连接状态
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>设备名称</th>
+                                    <th>IP地址</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for device in devices %}
+                                <tr>
+                                    <td>{{ device.hostname }}</td>
+                                    <td>{{ device.ip_address }}</td>
+                                    <td>{{ device.device_type }}</td>
+                                    <td>
+                                        <span class="connection-status {% if device.status %}connection-success{% else %}connection-failure{% endif %}">
+                                            {% if device.status %}在线{% else %}离线{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary force-connect-btn" 
+                                                data-device-id="{{ device.id }}">
+                                            <i class="fas fa-bolt me-1"></i>强制连接
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-terminal me-2"></i>强制连接配置
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="forceConfigForm">
+                        <div class="mb-3">
+                            <label for="connectionProtocol" class="form-label">连接协议</label>
+                            <select class="form-select" id="connectionProtocol">
+                                <option value="ssh">SSH (默认)</option>
+                                <option value="telnet">Telnet</option>
+                                <option value="netconf">NETCONF</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portNumber" class="form-label">端口号</label>
+                            <input type="number" class="form-control" id="portNumber" value="22">
+                        </div>
+                        <div class="mb-3">
+                            <label for="timeoutSetting" class="form-label">超时设置(秒)</label>
+                            <input type="number" class="form-control" id="timeoutSetting" value="30">
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="enableDebug">
+                            <label class="form-check-label" for="enableDebug">启用调试模式</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="configCommands" class="form-label">预配置命令</label>
+                            <textarea class="form-control" id="configCommands" rows="3" placeholder="输入强制连接成功后执行的命令..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-bolt me-1"></i>应用强制配置
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>连接日志
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table" id="connectionLogsTable">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>设备</th>
+                                    <th>操作</th>
+                                    <th>状态</th>
+                                    <th>详细信息</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in connection_logs %}
+                                <tr>
+                                    <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>{{ log.device.hostname }}</td>
+                                    <td>{{ log.message }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if log.status == 'success' %}success{% else %}danger{% endif %}">
+                                            {{ log.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-info view-details" 
+                                                data-log-id="{{ log.id }}">
+                                            <i class="fas fa-eye"></i> 查看
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详情模态框 -->
+<div class="modal fade" id="logDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">连接详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="logDetailsContent">
+                <!-- 详情内容将通过AJAX加载 -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 强制连接按钮点击事件
+    $('.force-connect-btn').click(function() {
+        const deviceId = $(this).data('device-id');
+        const protocol = $('#connectionProtocol').val();
+        const port = $('#portNumber').val();
+        const timeout = $('#timeoutSetting').val();
+        const debug = $('#enableDebug').is(':checked');
+        const commands = $('#configCommands').val().split('\n').filter(cmd => cmd.trim() !== '');
+
+        // 显示加载状态
+        const btn = $(this);
+        btn.html('<i class="fas fa-spinner fa-spin me-1"></i>连接中...');
+        btn.prop('disabled', true);
+
+        // 发送AJAX请求
+        $.ajax({
+            url: '/api/devices/' + deviceId + '/force-connect',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                protocol: protocol,
+                port: port,
+                timeout: timeout,
+                debug: debug,
+                commands: commands
+            }),
+            success: function(response) {
+                if (response.success) {
+                    toastr.success('强制连接成功: ' + response.message);
+                    // 更新状态显示
+                    btn.closest('tr').find('.connection-status')
+                        .removeClass('connection-failure')
+                        .addClass('connection-success')
+                        .text('在线');
+                    // 刷新日志表格
+                    refreshLogs();
+                } else {
+                    toastr.error('强制连接失败: ' + (response.error || '未知错误'));
+                }
+            },
+            error: function(xhr) {
+                const errorMsg = xhr.responseJSON && xhr.responseJSON.error 
+                    ? xhr.responseJSON.error 
+                    : '服务器错误';
+                toastr.error('强制连接失败: ' + errorMsg);
+            },
+            complete: function() {
+                btn.html('<i class="fas fa-bolt me-1"></i>强制连接');
+                btn.prop('disabled', false);
+            }
+        });
+    });
+
+    // 查看日志详情
+    $('.view-details').click(function() {
+        const logId = $(this).data('log-id');
+        
+        $.get('/api/logs/' + logId + '/details', function(response) {
+            if (response.success) {
+                $('#logDetailsContent').html('<pre>' + response.details + '</pre>');
+                $('#logDetailsModal').modal('show');
+            } else {
+                toastr.error('获取详情失败: ' + (response.error || '未知错误'));
+            }
+        });
+    });
+
+    // 刷新日志表格
+    function refreshLogs() {
+        $.get('/api/logs/connection', function(response) {
+            if (response.success) {
+                const tbody = $('#connectionLogsTable tbody');
+                tbody.empty();
+                
+                response.logs.forEach(function(log) {
+                    tbody.append(`
+                        <tr>
+                            <td>${new Date(log.created_at).toLocaleString()}</td>
+                            <td>${log.device.hostname}</td>
+                            <td>${log.message}</td>
+                            <td>
+                                <span class="badge bg-${log.status === 'success' ? 'success' : 'danger'}">
+                                    ${log.status}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info view-details" 
+                                        data-log-id="${log.id}">
+                                    <i class="fas fa-eye"></i> 查看
+                                </button>
+                            </td>
+                        </tr>
+                    `);
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

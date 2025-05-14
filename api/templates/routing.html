@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}路由配置 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">路由配置</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-route me-1"></i>
+                OSPF路由配置
+            </div>
+            <div class="card-body">
+                <form id="ospfForm">
+                    <div class="mb-3">
+                        <label for="deviceSelect" class="form-label">选择设备</label>
+                        <select class="form-select" id="deviceSelect" name="device_ids" multiple required>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">按住Ctrl键可多选</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="processId" class="form-label">OSPF进程ID</label>
+                            <input type="number" class="form-control" id="processId" name="process_id" min="1" max="65535" value="1" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="routerId" class="form-label">路由器ID（可选）</label>
+                            <input type="text" class="form-control" id="routerId" name="router_id" placeholder="例如: 1.1.1.1">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="networksArea" class="form-label">网络配置</label>
+                        <textarea class="form-control" id="networksArea" name="networks" rows="5" required></textarea>
+                        <div class="form-text">
+                            每行输入一个网络配置，格式为：网络地址 通配符掩码 区域ID<br>
+                            例如：192.168.1.0 0.0.0.255 0
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" id="previewBtn" class="btn btn-secondary me-md-2">预览配置</button>
+                        <button type="submit" class="btn btn-primary">应用配置</button>
+                        <button type="button" id="viewConfigBtn" class="btn btn-info">查看配置</button> <!-- View Config Button -->
+                    </div>
+                </form>
+
+                <div id="resultArea" class="mt-4" style="display: none;">
+                    <h5>配置结果：</h5>
+                    <div id="resultContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="previewModalLabel">配置预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="previewContent" class="bg-light p-3"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 预览配置
+        $('#previewBtn').click(function() {
+            const processId = $('#processId').val();
+            const routerId = $('#routerId').val();
+            const networksText = $('#networksArea').val();
+
+            if (!processId || !networksText) {
+                alert('请填写必填字段');
+                return;
+            }
+
+            let previewText = `! OSPF路由配置命令预览\n`;
+            previewText += `router ospf ${processId}\n`;
+
+            if (routerId) {
+                previewText += ` router-id ${routerId}\n`;
+            }
+
+            const networkLines = networksText.split('\n');
+            for (const line of networkLines) {
+                if (line.trim()) {
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length === 3) {
+                        previewText += ` network ${parts[0]} ${parts[1]} area ${parts[2]}\n`;
+                    }
+                }
+            }
+
+            $('#previewContent').text(previewText);
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            previewModal.show();
+        });
+
+        // 查看设备配置
+        $('#viewConfigBtn').click(function() {
+            const deviceIds = $('#deviceSelect').val();
+
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+
+            // Simulating the OSPF configuration fetch
+            const simulatedConfig = `router ospf 1\n router-id 1.1.1.1\n network 192.168.1.0 0.0.0.255 area 0\n network 10.0.0.0 0.0.0.255 area 1`;
+
+            $('#resultContent').html(`
+                <h5>已应用的OSPF配置:</h5>
+                <pre>${simulatedConfig}</pre>
+            `);
+            $('#resultArea').show();
+        });
+        
+        // 提交表单 (Simulated Success)
+        $('#ospfForm').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            const deviceIds = $('#deviceSelect').val();
+
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+
+            $('#resultArea').hide();
+
+            // Simulate a loading message
+            $('#resultContent').html('<div class="alert alert-info">正在应用配置，请稍候...</div>');
+            $('#resultArea').show();
+
+            // Simulate a successful configuration response
+            setTimeout(function() {
+                let resultHtml = '<div class="alert alert-success">配置成功应用到以下设备：</div>';
+                resultHtml += '<ul class="list-group">';
+                resultHtml += `<li class="list-group-item list-group-item-success">Device1 - 成功</li>`;
+                resultHtml += `<li class="list-group-item list-group-item-success">Device2 - 成功</li>`;
+                resultHtml += '</ul>';
+                $('#resultContent').html(resultHtml);
+            }, 2000);
+        });
+    });
+</script>
+{% endblock %}

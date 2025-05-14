@@ -1,0 +1,310 @@
+{% extends 'base.html' %}
+
+{% block title %}添加模拟模板 - 校园网络自动化运维系统{% endblock %}
+
+{% block styles %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
+<style>
+    .CodeMirror {
+        height: 400px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .device-image {
+        max-width: 100px;
+        max-height: 100px;
+        cursor: pointer;
+        padding: 10px;
+        border: 2px solid transparent;
+        border-radius: 5px;
+        transition: all 0.2s;
+    }
+    .device-image:hover {
+        transform: scale(1.05);
+    }
+    .device-image.selected {
+        border-color: #28a745;
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">添加模拟模板</h1>
+        <a href="{{ url_for('simulation_templates') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> 返回模板列表
+        </a>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">
+    <i class="fas fa-exclamation-circle"></i> {{ error }}
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="fas fa-file-code me-1"></i>
+        模板信息
+    </div>
+    <div class="card-body">
+        <form method="post" id="templateForm">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="name" class="form-label">模板名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="name" name="name" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="device_type" class="form-label">设备类型 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="device_type" name="device_type" required>
+                        <option value="">请选择设备类型</option>
+                        <option value="huawei">华为设备</option>
+                        <option value="huawei_ar">华为路由器 (AR系列)</option>
+                        <option value="huawei_s">华为交换机 (S系列)</option>
+                        <option value="cisco_ios">思科IOS设备</option>
+                        <option value="h3c">H3C设备</option>
+                        <option value="generic">通用设备</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="description" class="form-label">描述</label>
+                <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">拓扑布局</label>
+                <div class="row text-center">
+                    <div class="col-md-3 mb-3">
+                        <img src="{{ url_for('static', filename='images/topology_star.png') }}" alt="星型拓扑" class="device-image" data-type="star">
+                        <div>星型</div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <img src="{{ url_for('static', filename='images/topology_ring.png') }}" alt="环型拓扑" class="device-image" data-type="ring">
+                        <div>环型</div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <img src="{{ url_for('static', filename='images/topology_mesh.png') }}" alt="网状拓扑" class="device-image" data-type="mesh">
+                        <div>网状</div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <img src="{{ url_for('static', filename='images/topology_linear.png') }}" alt="线性拓扑" class="device-image" data-type="linear">
+                        <div>线性</div>
+                    </div>
+                </div>
+                <input type="hidden" id="topology_type" name="topology_type" value="star">
+            </div>
+            
+            <div class="mb-3">
+                <label for="template_content" class="form-label">模板内容 <span class="text-danger">*</span></label>
+                <textarea class="form-control" id="template_content" name="template_content" rows="15" required></textarea>
+                <div class="form-text">
+                    使用特殊变量如 ${HOSTNAME}, ${IP_ADDRESS} 等作为占位符。
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="topology_data" class="form-label">拓扑数据 (JSON 格式, 可选)</label>
+                <textarea class="form-control" id="topology_data" name="topology_data" rows="5"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <button type="button" class="btn btn-outline-primary" id="loadTemplateBtn">
+                    <i class="fas fa-file-import"></i> 加载默认模板
+                </button>
+                <button type="button" class="btn btn-outline-info" id="previewBtn">
+                    <i class="fas fa-eye"></i> 预览
+                </button>
+            </div>
+            
+            <div class="text-end">
+                <button type="submit" class="btn btn-primary" id="saveTemplateBtn">
+                    <i class="fas fa-save"></i> 保存模板
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">模板预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">设备类型</label>
+                    <input type="text" class="form-control" id="previewDeviceType" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">预览内容 (变量会以示例值替换)</label>
+                    <pre class="form-control bg-light" id="previewContent" style="height: 300px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/shell/shell.min.js"></script>
+<script>
+$(document).ready(function() {
+    // 初始化代码编辑器
+    const templateEditor = CodeMirror.fromTextArea(document.getElementById('template_content'), {
+        lineNumbers: true,
+        mode: 'shell',
+        theme: 'default',
+        indentWithTabs: false,
+        tabSize: 4,
+        lineWrapping: true
+    });
+    
+    const topologyEditor = CodeMirror.fromTextArea(document.getElementById('topology_data'), {
+        lineNumbers: true,
+        mode: { name: 'javascript', json: true },
+        theme: 'default',
+        tabSize: 2
+    });
+    
+    // 拓扑类型选择
+    $('.device-image').click(function() {
+        $('.device-image').removeClass('selected');
+        $(this).addClass('selected');
+        $('#topology_type').val($(this).data('type'));
+    });
+    
+    // 初始选择星型拓扑
+    $('.device-image[data-type="star"]').addClass('selected');
+    
+    // 加载默认模板
+    $('#loadTemplateBtn').click(function() {
+        const deviceType = $('#device_type').val();
+        if (!deviceType) {
+            alert('请先选择设备类型');
+            return;
+        }
+        
+        // 请求默认模板
+        $.ajax({
+            url: `/api/topology/simulation/templates/default?device_type=${deviceType}`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    templateEditor.setValue(response.template_content);
+                    
+                    if (response.topology_data) {
+                        topologyEditor.setValue(response.topology_data);
+                    }
+                } else {
+                    alert('加载默认模板失败：' + response.error);
+                }
+            },
+            error: function(xhr) {
+                alert('请求失败：' + (xhr.responseJSON?.error || xhr.statusText || '未知错误'));
+            }
+        });
+    });
+    
+    // 预览模板
+    $('#previewBtn').click(function() {
+        const deviceType = $('#device_type').val();
+        const templateContent = templateEditor.getValue();
+        
+        if (!deviceType || !templateContent) {
+            alert('请填写设备类型和模板内容');
+            return;
+        }
+        
+        // 显示预览
+        $('#previewDeviceType').val($('#device_type option:selected').text());
+        
+        // 替换变量为示例值
+        let previewContent = templateContent
+            .replace(/\${HOSTNAME}/g, 'EXAMPLE-DEVICE')
+            .replace(/\${IP_ADDRESS}/g, '192.168.1.1')
+            .replace(/\${DEVICE_TYPE}/g, deviceType)
+            .replace(/\${DEVICE_ID}/g, '1');
+        
+        $('#previewContent').text(previewContent);
+        $('#previewModal').modal('show');
+    });
+    
+    // 表单提交前处理
+    $('#templateForm').submit(function() {
+        // 将编辑器内容同步到表单字段
+        templateEditor.save();
+        topologyEditor.save();
+        
+        return true;
+    });
+    
+    // 当设备类型改变时更新编辑器模式
+    $('#device_type').change(function() {
+        const deviceType = $(this).val();
+        
+        // 清空编辑器内容
+        templateEditor.setValue('');
+        topologyEditor.setValue('');
+        
+        // 生成默认拓扑数据
+        if (deviceType) {
+            const topoType = $('#topology_type').val();
+            const defaultTopo = generateDefaultTopology(topoType);
+            topologyEditor.setValue(JSON.stringify(defaultTopo, null, 2));
+        }
+    });
+    
+    // 生成默认拓扑数据
+    function generateDefaultTopology(type) {
+        const topoData = {
+            "devices": [
+                { "name": "Device1", "type": "AR", "x": 100, "y": 100 },
+                { "name": "Device2", "type": "AR", "x": 300, "y": 100 },
+                { "name": "Device3", "type": "AR", "x": 200, "y": 250 }
+            ],
+            "connections": []
+        };
+        
+        // 根据类型生成连接
+        if (type === 'star') {
+            topoData.connections = [
+                { "source": 0, "target": 1 },
+                { "source": 0, "target": 2 }
+            ];
+        } else if (type === 'ring') {
+            topoData.connections = [
+                { "source": 0, "target": 1 },
+                { "source": 1, "target": 2 },
+                { "source": 2, "target": 0 }
+            ];
+        } else if (type === 'mesh') {
+            topoData.connections = [
+                { "source": 0, "target": 1 },
+                { "source": 0, "target": 2 },
+                { "source": 1, "target": 2 }
+            ];
+        } else if (type === 'linear') {
+            topoData.connections = [
+                { "source": 0, "target": 1 },
+                { "source": 1, "target": 2 }
+            ];
+        }
+        
+        return topoData;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,344 @@
+{% extends 'base.html' %}
+
+{% block title %}监控仪表盘 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">监控仪表盘</h1>
+        <div>
+            <button id="startMonitoringBtn" class="btn btn-success me-2">
+                <i class="fas fa-play"></i> 启动监控
+            </button>
+            <button id="stopMonitoringBtn" class="btn btn-danger">
+                <i class="fas fa-stop"></i> 停止监控
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary h-100">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-server me-1"></i>
+                设备监控状态
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-column">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>总设备数:</span>
+                        <span class="fw-bold">{{ devices|length }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>监控中:</span>
+                        <span class="fw-bold text-success">{{ monitoring_status.values()|selectattr('is_monitoring', 'eq', true)|list|length }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>正常:</span>
+                        <span class="fw-bold text-success">{{ monitoring_status.values()|selectattr('status', 'eq', 'normal')|list|length }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>警告:</span>
+                        <span class="fw-bold text-warning">{{ monitoring_status.values()|selectattr('status', 'eq', 'warning')|list|length }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>警报:</span>
+                        <span class="fw-bold text-danger">{{ monitoring_status.values()|selectattr('status', 'eq', 'critical')|list|length }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="card border-info h-100">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-chart-line me-1"></i>
+                监控概览
+            </div>
+            <div class="card-body">
+                <canvas id="monitoringChart" style="width: 100%; height: 250px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-desktop me-1"></i>
+                设备监控详情
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="devicesTable">
+                        <thead>
+                            <tr>
+                                <th>设备名称</th>
+                                <th>IP地址</th>
+                                <th>设备类型</th>
+                                <th>网络层级</th>
+                                <th>CPU使用率</th>
+                                <th>内存使用率</th>
+                                <th>状态</th>
+                                <th>最后更新</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for device in devices %}
+                            {% set status = monitoring_status.get(device.id, {}) %}
+                            <tr>
+                                <td>{{ device.hostname }}</td>
+                                <td>{{ device.ip_address }}</td>
+                                <td>{{ device.device_type }}</td>
+                                <td>
+                                    {% if device.network_layer == 'core' %}
+                                    <span class="badge bg-danger">核心层</span>
+                                    {% elif device.network_layer == 'distribution' %}
+                                    <span class="badge bg-warning">汇聚层</span>
+                                    {% elif device.network_layer == 'access' %}
+                                    <span class="badge bg-info">接入层</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ device.network_layer }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if status and status.cpu_usage is defined and status.cpu_usage is not none %}
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar progress-bar-striped
+                                            {% if status.cpu_usage > 80 %}bg-danger
+                                            {% elif status.cpu_usage > 60 %}bg-warning
+                                            {% else %}bg-success{% endif %}"
+                                            role="progressbar" style="width: {{ status.cpu_usage }}%;"
+                                            aria-valuenow="{{ status.cpu_usage }}" aria-valuemin="0" aria-valuemax="100">
+                                            {{ status.cpu_usage }}%
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">无数据</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if status and status.memory_usage is defined and status.memory_usage is not none %}
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar progress-bar-striped
+                                            {% if status.memory_usage > 80 %}bg-danger
+                                            {% elif status.memory_usage > 60 %}bg-warning
+                                            {% else %}bg-success{% endif %}"
+                                            role="progressbar" style="width: {{ status.memory_usage }}%;"
+                                            aria-valuenow="{{ status.memory_usage }}" aria-valuemin="0" aria-valuemax="100">
+                                            {{ status.memory_usage }}%
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">无数据</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if status %}
+                                        {% if status.status == 'normal' %}
+                                        <span class="badge bg-success">正常</span>
+                                        {% elif status.status == 'warning' %}
+                                        <span class="badge bg-warning">警告</span>
+                                        {% elif status.status == 'critical' %}
+                                        <span class="badge bg-danger">警报</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">未知</span>
+                                        {% endif %}
+                                    {% else %}
+                                    <span class="badge bg-secondary">未监控</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if status and status.last_update %}
+                                    {{ status.last_update }}
+                                    {% else %}
+                                    <span class="text-muted">无数据</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary refreshDeviceBtn" data-id="{{ device.id }}">
+                                        <i class="fas fa-sync-alt"></i> 刷新
+                                    </button>
+                                    <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-eye"></i> 详情
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    $(document).ready(function() {
+        // 初始化数据表格
+        $('#devicesTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.11.5/i18n/zh.json"
+            }
+        });
+
+        // 监控概览图表
+        const ctx = document.getElementById('monitoringChart').getContext('2d');
+        const monitoringChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['CPU使用率', '内存使用率'],
+                datasets: [
+                    {
+                        label: '核心层',
+                        data: [
+                            {{ monitoring_status.values()|selectattr('device_layer', 'eq', 'core')|selectattr('cpu_usage', 'defined')|rejectattr('cpu_usage', 'none')|map(attribute='cpu_usage')|list|join(', ') or '0' }},
+                            {{ monitoring_status.values()|selectattr('device_layer', 'eq', 'core')|selectattr('memory_usage', 'defined')|rejectattr('memory_usage', 'none')|map(attribute='memory_usage')|list|join(', ') or '0' }}
+                        ],
+                        backgroundColor: 'rgba(255, 87, 51, 0.5)',
+                        borderColor: 'rgba(255, 87, 51, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '汇聚层',
+                        data: [
+                            {{ monitoring_status.values()|selectattr('device_layer', 'eq', 'distribution')|selectattr('cpu_usage', 'defined')|rejectattr('cpu_usage', 'none')|map(attribute='cpu_usage')|list|join(', ') or '0' }},
+                            {{ monitoring_status.values()|selectattr('device_layer', 'eq', 'distribution')|selectattr('memory_usage', 'defined')|rejectattr('memory_usage', 'none')|map(attribute='memory_usage')|list|join(', ') or '0' }}
+                        ],
+                        backgroundColor: 'rgba(51, 255, 87, 0.5)',
+                        borderColor: 'rgba(51, 255, 87, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '接入层',
+                        data: [
+                            {{ monitoring_status.values()|selectattr('device_layer', 'eq', 'access')|selectattr('cpu_usage', 'defined')|rejectattr('cpu_usage', 'none')|map(attribute='cpu_usage')|list|join(', ') or '0' }},
+                            {{ monitoring_status.values()|selectattr('device_layer', 'eq', 'access')|selectattr('memory_usage', 'defined')|rejectattr('memory_usage', 'none')|map(attribute='memory_usage')|list|join(', ') or '0' }}
+                        ],
+                        backgroundColor: 'rgba(51, 87, 255, 0.5)',
+                        borderColor: 'rgba(51, 87, 255, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '设备资源使用率平均值 (%)'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // 启动监控
+        $('#startMonitoringBtn').click(function() {
+            const button = $(this);
+            button.html('<i class="fas fa-spinner fa-spin"></i> 启动中...');
+            button.prop('disabled', true);
+
+            $.ajax({
+                url: '{{ url_for("api_start_monitoring") }}',
+                method: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        alert('监控线程已启动');
+                    } else {
+                        alert('启动失败: ' + response.message);
+                    }
+                    button.html('<i class="fas fa-play"></i> 启动监控');
+                    button.prop('disabled', false);
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                },
+                error: function(xhr) {
+                    alert('发生错误: ' + xhr.responseJSON?.error || '未知错误');
+                    button.html('<i class="fas fa-play"></i> 启动监控');
+                    button.prop('disabled', false);
+                }
+            });
+        });
+
+        // 停止监控
+        $('#stopMonitoringBtn').click(function() {
+            const button = $(this);
+            button.html('<i class="fas fa-spinner fa-spin"></i> 停止中...');
+            button.prop('disabled', true);
+
+            $.ajax({
+                url: '{{ url_for("api_stop_monitoring") }}',
+                method: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        alert('已发送停止监控的信号');
+                    } else {
+                        alert('停止失败: ' + response.message);
+                    }
+                    button.html('<i class="fas fa-stop"></i> 停止监控');
+                    button.prop('disabled', false);
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                },
+                error: function(xhr) {
+                    alert('发生错误: ' + xhr.responseJSON?.error || '未知错误');
+                    button.html('<i class="fas fa-stop"></i> 停止监控');
+                    button.prop('disabled', false);
+                }
+            });
+        });
+
+        // 刷新单个设备数据
+        $('.refreshDeviceBtn').click(function() {
+            const deviceId = $(this).data('id');
+            const button = $(this);
+            button.html('<i class="fas fa-spinner fa-spin"></i>');
+            button.prop('disabled', true);
+
+            $.ajax({
+                url: `/api/devices/${deviceId}/refresh`,
+                method: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        alert('刷新成功');
+                        location.reload();
+                    } else {
+                        alert('刷新失败: ' + response.error);
+                        button.html('<i class="fas fa-sync-alt"></i> 刷新');
+                        button.prop('disabled', false);
+                    }
+                },
+                error: function(xhr) {
+                    alert('发生错误: ' + xhr.responseJSON?.error || '未知错误');
+                    button.html('<i class="fas fa-sync-alt"></i> 刷新');
+                    button.prop('disabled', false);
+                }
+            });
+        });
+
+        // 自动刷新
+        setTimeout(function() {
+            location.reload();
+        }, 60000); // 每60秒刷新一次页面
+    });
+</script>
+{% endblock %}

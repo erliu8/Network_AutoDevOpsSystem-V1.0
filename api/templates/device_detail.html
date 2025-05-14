@@ -1,0 +1,502 @@
+{% extends 'base.html' %}
+
+{% block title %}设备详情 - {{ device.hostname }} - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3">设备详情 - {{ device.hostname }}</h1>
+            <div>
+                <button id="refreshDeviceBtn" class="btn btn-success" data-id="{{ device.id }}">
+                    <i class="fas fa-sync-alt"></i> 刷新状态
+                </button>
+<!--                <button id="backupDeviceBtn" class="btn btn-info" data-id="{{ device.id }}">-->
+<!--                    <i class="fas fa-save"></i> 备份-->
+<!--                </button>-->
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备基本信息 -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-info-circle me-1"></i>
+                    基本信息
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th style="width: 30%">设备名称</th>
+                                <td>{{ device.hostname }}</td>
+                            </tr>
+                            <tr>
+                                <th>IP地址</th>
+                                <td>{{ device.ip_address }}</td>
+                            </tr>
+                            <tr>
+                                <th>设备类型</th>
+                                <td>{{ device.device_type }}</td>
+                            </tr>
+                            <tr>
+                                <th>网络层级</th>
+                                <td>
+                                    {% if device.network_layer == 'core' %}
+                                    <span class="badge bg-danger">核心层</span>
+                                    {% elif device.network_layer == 'distribution' %}
+                                    <span class="badge bg-warning">汇聚层</span>
+                                    {% elif device.network_layer == 'access' %}
+                                    <span class="badge bg-info">接入层</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ device.network_layer }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>状态</th>
+                                <td>
+                                    {% if device.status %}
+                                    <span class="badge bg-success">在线</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">离线</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备监控数据 -->
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-area me-1"></i>
+                    监控数据
+                </div>
+                <div class="card-body">
+                    {% if latest_data %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="card-title">CPU使用率</h5>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar progress-bar-striped
+                                            {% if latest_data.cpu_usage > 80 %}bg-danger
+                                            {% elif latest_data.cpu_usage > 60 %}bg-warning
+                                            {% else %}bg-success{% endif %}"
+                                            role="progressbar" style="width: {{ latest_data.cpu_usage }}%"
+                                            aria-valuenow="{{ latest_data.cpu_usage }}" aria-valuemin="0" aria-valuemax="100">
+                                            {{ latest_data.cpu_usage }}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="card-title">内存使用率</h5>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar progress-bar-striped
+                                            {% if latest_data.memory_usage > 80 %}bg-danger
+                                            {% elif latest_data.memory_usage > 60 %}bg-warning
+                                            {% else %}bg-success{% endif %}"
+                                            role="progressbar" style="width: {{ latest_data.memory_usage }}%"
+                                            aria-valuenow="{{ latest_data.memory_usage }}" aria-valuemin="0" aria-valuemax="100">
+                                            {{ latest_data.memory_usage }}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <p><strong>运行时间:</strong> {{ latest_data.uptime }}</p>
+                        <p><strong>最后更新:</strong> {{ latest_data.timestamp }}</p>
+                    </div>
+                    {% if latest_data.interface_data %}
+                    <div class="mb-3">
+                        <h5>接口状态</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>接口</th>
+                                        <th>状态</th>
+                                        <th>IP地址</th>
+                                        <th>带宽</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for intf in latest_data.interface_data %}
+                                    <tr>
+                                        <td>{{ intf.name }}</td>
+                                        <td>
+                                            {% if intf.status == 'up' %}
+                                            <span class="badge bg-success">启用</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">禁用</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ intf.ip_address }}</td>
+                                        <td>{{ intf.bandwidth }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        暂无监控数据，请点击"刷新状态"按钮获取最新数据。
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备命令执行 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-terminal me-1"></i>
+                    命令执行
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="commandInput" class="form-label">输入命令:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="commandInput" placeholder="例如: show version">
+                            <button class="btn btn-primary" id="executeCommandBtn">执行</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="commandOutput" class="form-label">输出结果:</label>
+                        <div class="card bg-dark text-light">
+                            <pre class="card-body" id="commandOutput" style="max-height: 300px; overflow-y: auto;">输出将显示在这里...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置模式 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-edit me-1"></i>
+                    配置模式
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="configTextarea" class="form-label">输入配置命令 (每行一条):</label>
+                        <textarea class="form-control" id="configTextarea" rows="5" placeholder="interface GigabitEthernet0/1
+description LAN Connection
+no shutdown"></textarea>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button class="btn btn-primary" id="applyConfigBtn">应用配置</button>
+                    </div>
+                    <div class="mt-3" id="configResult"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备性能分析 -->
+    {% if performance %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-line me-1"></i>
+                    性能分析 (最近7天)
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <canvas id="cpuChart"></canvas>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <canvas id="memoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+$(document).ready(function() {
+    // 调试信息
+    console.log("jQuery版本:", $.fn.jquery);
+    console.log("刷新按钮:", $('#refreshDeviceBtn').length, "个");
+    console.log("备份按钮:", $('#backupDeviceBtn').length, "个");
+    console.log("执行命令按钮:", $('#executeCommandBtn').length, "个");
+    console.log("应用配置按钮:", $('#applyConfigBtn').length, "个");
+
+    // 定义错误处理函数
+    function showErrorMessage(message) {
+        if (typeof toastr !== 'undefined') {
+            toastr.error(message, '错误');
+        } else {
+            alert('错误: ' + message);
+        }
+    }
+
+    // 定义成功消息函数
+    function showSuccessMessage(message) {
+        if (typeof toastr !== 'undefined') {
+            toastr.success(message, '成功');
+        } else {
+            alert('成功: ' + message);
+        }
+    }
+
+    // 通用 AJAX 错误处理
+    function handleAjaxError(xhr, button) {
+        console.error("AJAX错误:", xhr);
+        const errorMsg = xhr.responseJSON?.error || xhr.statusText || '未知错误';
+        showErrorMessage(`操作失败: ${errorMsg}`);
+
+        if (button) {
+            // 还原按钮状态
+            button.html(button.data('original-text'));
+            button.prop('disabled', false);
+        }
+    }
+
+    // 保存按钮原始文本
+    $('#refreshDeviceBtn, #backupDeviceBtn, #executeCommandBtn, #applyConfigBtn').each(function() {
+        $(this).data('original-text', $(this).html());
+    });
+
+    // 刷新设备状态 - 使用on方法绑定
+    $(document).on('click', '#refreshDeviceBtn', function() {
+        const deviceId = $(this).data('id');
+        const button = $(this);
+
+        console.log("点击刷新按钮，设备ID:", deviceId);
+
+        button.html('<i class="fas fa-spinner fa-spin"></i> 刷新中...');
+        button.prop('disabled', true);
+
+        $.ajax({
+            url: `/api/devices/${deviceId}/refresh`,
+            method: 'POST',
+            success: function(response) {
+                console.log("刷新响应:", response);
+                if (response.success) {
+                    showSuccessMessage('设备状态刷新成功');
+                    location.reload();
+                } else {
+                    showErrorMessage(`刷新失败: ${response.error}`);
+                    button.html(button.data('original-text'));
+                    button.prop('disabled', false);
+                }
+            },
+            error: function(xhr) {
+                console.error("刷新失败:", xhr);
+                handleAjaxError(xhr, button);
+            }
+        });
+    });
+
+    // 备份设备配置 - 使用on方法绑定
+    $(document).on('click', '#backupDeviceBtn', function() {
+        const deviceId = $(this).data('id');
+        const button = $(this);
+
+        console.log("点击备份按钮，设备ID:", deviceId);
+
+        button.html('<i class="fas fa-spinner fa-spin"></i> 备份中...');
+        button.prop('disabled', true);
+
+        $.ajax({
+            url: `/api/backup/${deviceId}`,
+            method: 'POST',
+            success: function(response) {
+                console.log("备份响应:", response);
+                if (response.success) {
+                    showSuccessMessage('配置备份成功');
+                } else {
+                    showErrorMessage(`备份失败: ${response.error}`);
+                }
+                button.html(button.data('original-text'));
+                button.prop('disabled', false);
+            },
+            error: function(xhr) {
+                console.error("备份失败:", xhr);
+                handleAjaxError(xhr, button);
+            }
+        });
+    });
+
+    // 执行命令 - 使用on方法绑定
+    $(document).on('click', '#executeCommandBtn', function() {
+        const deviceId = {{ device.id }};
+        const command = $('#commandInput').val().trim();
+        const button = $(this);
+
+        if (!command) {
+            showErrorMessage('请输入命令');
+            return;
+        }
+
+        console.log("执行命令:", command);
+
+        button.html('<i class="fas fa-spinner fa-spin"></i> 执行中...');
+        button.prop('disabled', true);
+        $('#commandOutput').text('正在执行命令，请稍候...');
+
+        $.ajax({
+            url: `/api/devices/${deviceId}/execute`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ command: command }),
+            success: function(response) {
+                console.log("命令执行响应:", response);
+                if (response.success) {
+                    $('#commandOutput').text(response.output);
+                    showSuccessMessage('命令执行成功');
+                } else {
+                    $('#commandOutput').text(`执行失败: ${response.error}`);
+                    showErrorMessage('命令执行失败');
+                }
+                button.html(button.data('original-text'));
+                button.prop('disabled', false);
+            },
+            error: function(xhr) {
+                console.error("命令执行失败:", xhr);
+                $('#commandOutput').text('执行失败');
+                handleAjaxError(xhr, button);
+            }
+        });
+    });
+
+    // 应用配置 - 使用on方法绑定
+    $(document).on('click', '#applyConfigBtn', function() {
+        const deviceId = {{ device.id }};
+        const config = $('#configTextarea').val().trim();
+        const button = $(this);
+
+        if (!config) {
+            showErrorMessage('请输入配置命令');
+            return;
+        }
+
+        console.log("应用配置:", config);
+
+        button.html('<i class="fas fa-spinner fa-spin"></i> 应用中...');
+        button.prop('disabled', true);
+        $('#configResult').html('<div class="alert alert-info">正在应用配置，请稍候...</div>');
+
+        $.ajax({
+            url: `/api/devices/${deviceId}/configure`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ config: config }),
+            success: function(response) {
+                console.log("配置应用响应:", response);
+                if (response.success) {
+                    $('#configResult').html('<div class="alert alert-success">配置应用成功</div>');
+                    showSuccessMessage('配置应用成功');
+                } else {
+                    $('#configResult').html(`<div class="alert alert-danger">配置应用失败: ${response.error}</div>`);
+                    showErrorMessage('配置应用失败');
+                }
+                button.html(button.data('original-text'));
+                button.prop('disabled', false);
+            },
+            error: function(xhr) {
+                console.error("配置应用失败:", xhr);
+                $('#configResult').html('<div class="alert alert-danger">配置应用失败</div>');
+                handleAjaxError(xhr, button);
+            }
+        });
+    });
+
+    {% if performance %}
+    // 性能图表
+    const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+    const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+
+    // CPU使用率图表
+    new Chart(cpuCtx, {
+        type: 'line',
+        data: {
+            labels: [{% for p in performance %}'{{ p.timestamp }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+            datasets: [{
+                label: 'CPU使用率 (%)',
+                data: [{% for p in performance %}{{ p.cpu_usage }}{% if not loop.last %}, {% endif %}{% endfor %}],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderWidth: 2,
+                tension: 0.1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'CPU使用率历史趋势'
+                }
+            }
+        }
+    });
+
+    // 内存使用率图表
+    new Chart(memoryCtx, {
+        type: 'line',
+        data: {
+            labels: [{% for p in performance %}'{{ p.timestamp }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+            datasets: [{
+                label: '内存使用率 (%)',
+                data: [{% for p in performance %}{{ p.memory_usage }}{% if not loop.last %}, {% endif %}{% endfor %}],
+                borderColor: 'rgba(153, 102, 255, 1)',
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                borderWidth: 2,
+                tension: 0.1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: '内存使用率历史趋势'
+                }
+            }
+        }
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}

@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}批量配置 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1 class="h3">批量配置</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-tasks me-1"></i>
+                批量设备配置
+            </div>
+            <div class="card-body">
+                <form id="batchConfigForm">
+                    <div class="mb-3">
+                        <label for="deviceSelect" class="form-label">选择设备</label>
+                        <select class="form-select" id="deviceSelect" name="device_ids" multiple required>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}">{{ device.hostname }} ({{ device.ip_address }}) - {{ device.device_type }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">按住Ctrl键可多选</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="configCommands" class="form-label">配置命令</label>
+                        <textarea class="form-control" id="configCommands" name="config_commands" rows="10" required></textarea>
+                        <div class="form-text">每行输入一条配置命令</div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" id="clearBtn" class="btn btn-secondary me-md-2">清空</button>
+                        <button type="button" id="loadTemplateBtn" class="btn btn-info me-md-2">加载模板</button>
+                        <button type="submit" class="btn btn-primary">应用配置</button>
+                    </div>
+                </form>
+
+                <div id="resultArea" class="mt-4" style="display: none;">
+                    <h5>配置结果：</h5>
+                    <div id="resultContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 模板选择模态框 -->
+<div class="modal fade" id="templateModal" tabindex="-1" aria-labelledby="templateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="templateModalLabel">选择配置模板</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div class="list-group">
+                    <button type="button" class="list-group-item list-group-item-action template-option" data-template="interface">
+                        接口配置模板
+                    </button>
+                    <button type="button" class="list-group-item list-group-item-action template-option" data-template="acl">
+                        ACL配置模板
+                    </button>
+                    <button type="button" class="list-group-item list-group-item-action template-option" data-template="snmp">
+                        SNMP配置模板
+                    </button>
+                    <button type="button" class="list-group-item list-group-item-action template-option" data-template="ntp">
+                        NTP配置模板
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 配置模板
+        const configTemplates = {
+            'interface': '! 接口配置模板\ninterface GigabitEthernet0/1\n description LAN Connection\n ip address 192.168.1.1 255.255.255.0\n no shutdown',
+            'acl': '! ACL配置模板\nip access-list extended BLOCK_TELNET\n deny tcp any any eq 23\n permit ip any any\n!\ninterface GigabitEthernet0/1\n ip access-group BLOCK_TELNET in',
+            'snmp': '! SNMP配置模板\nsnmp-server community public RO\nsnmp-server community private RW\nsnmp-server location Campus Network\nsnmp-server contact admin@example.com',
+            'ntp': '! NTP配置模板\nntp server 10.0.0.1\nntp server 10.0.0.2\nntp source GigabitEthernet0/0\nntp update-calendar'
+        };
+        
+        // 加载模板按钮
+        $('#loadTemplateBtn').click(function() {
+            const templateModal = new bootstrap.Modal(document.getElementById('templateModal'));
+            templateModal.show();
+        });
+        
+        // 选择模板
+        $('.template-option').click(function() {
+            const templateName = $(this).data('template');
+            const templateContent = configTemplates[templateName];
+            
+            if (templateContent) {
+                $('#configCommands').val(templateContent);
+                bootstrap.Modal.getInstance(document.getElementById('templateModal')).hide();
+            }
+        });
+        
+        // 清空按钮
+        $('#clearBtn').click(function() {
+            $('#configCommands').val('');
+        });
+        
+        // 提交表单
+        $('#batchConfigForm').submit(function(e) {
+            e.preventDefault();
+            
+            const form = $(this);
+            const deviceIds = $('#deviceSelect').val();
+            const commands = $('#configCommands').val().trim();
+            
+            if (!deviceIds || deviceIds.length === 0) {
+                alert('请选择至少一个设备');
+                return;
+            }
+            
+            if (!commands) {
+                alert('请输入配置命令');
+                return;
+            }
+            
+            $('#resultArea').hide();
+            
+            // 显示加载提示
+            $('#resultContent').html('<div class="alert alert-info">正在应用配置，请稍候...</div>');
+            $('#resultArea').show();
+            
+            // 提交配置
+            $.ajax({
+                url: '{{ url_for("batch_config") }}',
+                method: 'POST',
+                data: form.serialize(),
+                success: function(response) {
+                    if (response.success) {
+                        let resultHtml = '<div class="alert alert-success">配置成功应用到以下设备：</div>';
+                        resultHtml += '<ul class="list-group">';
+                        
+                        for (const [deviceId, result] of Object.entries(response.results)) {
+                            const deviceName = result.hostname || `设备 ${deviceId}`;
+                            if (result.success) {
+                                resultHtml += `<li class="list-group-item list-group-item-success">${deviceName} - 成功</li>`;
+                            } else {
+                                resultHtml += `<li class="list-group-item list-group-item-danger">${deviceName} - 失败: ${result.error}</li>`;
+                            }
+                        }
+                        
+                        resultHtml += '</ul>';
+                        $('#resultContent').html(resultHtml);
+                    } else {
+                        $('#resultContent').html(`<div class="alert alert-danger">操作失败: ${response.error}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#resultContent').html(`<div class="alert alert-danger">发生错误: ${xhr.responseJSON?.error || '未知错误'}</div>`);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

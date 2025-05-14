@@ -1,0 +1,465 @@
+{% extends 'base.html' %}
+
+{% block title %}仪表盘 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="h3 mb-4">系统仪表盘</h1>
+        <div id="connection-status" class="mb-3">
+            <span class="badge bg-secondary">WebSocket: 正在连接...</span>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white mb-4">
+            <div class="card-body">
+                <h5 class="card-title">设备总数</h5>
+                <h2 class="display-4" id="device-count">{{ device_count|default(0) }}</h2>
+            </div>
+            <div class="card-footer d-flex align-items-center justify-content-between">
+                <a class="small text-white stretched-link" href="{{ url_for('dashboard.index') }}">查看详情</a>
+                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white mb-4">
+            <div class="card-body">
+                <h5 class="card-title">在线设备</h5>
+                <h2 class="display-4" id="online-count">{{ online_count|default(0) }}</h2>
+            </div>
+            <div class="card-footer d-flex align-items-center justify-content-between">
+                <a class="small text-white stretched-link" href="{{ url_for('dashboard.index') }}">查看详情</a>
+                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-danger text-white mb-4">
+            <div class="card-body">
+                <h5 class="card-title">离线设备</h5>
+                <h2 class="display-4" id="offline-count">{{ offline_count|default(0) }}</h2>
+            </div>
+            <div class="card-footer d-flex align-items-center justify-content-between">
+                <a class="small text-white stretched-link" href="{{ url_for('dashboard.index') }}">查看详情</a>
+                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 设备状态 -->
+<div class="row mt-4">
+    <div class="col-lg-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-server me-1"></i>
+                设备状态
+                <span class="float-end text-muted" id="last-update-time">最后更新: 等待数据...</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="device-status-table">
+                        <thead>
+                            <tr>
+                                <th>设备名称</th>
+                                <th>IP地址</th>
+                                <th>网络层级</th>
+                                <th>设备类型</th>
+                                <th>状态</th>
+                                <th>CPU使用率</th>
+                                <th>内存使用率</th>
+                                <th>接口</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- 设备状态由WebSocket实时更新 -->
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近任务日志 -->
+<div class="row mt-4">
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-clipboard-list me-1"></i>
+                最近任务日志
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                            <tr>
+                                <th>任务类型</th>
+                                <th>状态</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in recent_logs %}
+                            <tr>
+                                <td>{{ log.task_type }}</td>
+                                <td>
+                                    {% if log.status == 'success' %}
+                                    <span class="badge bg-success">成功</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">失败</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">查看所有日志</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快速操作 -->
+<div class="row mt-2">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-bolt me-1"></i>
+                快速操作
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-plus-circle"></i> 添加设备
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-tasks"></i> 批量配置
+                        </a>
+                    </div>
+<!--                    <div class="col-md-3 mb-3">-->
+<!--                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-info btn-lg w-100">-->
+<!--                            <i class="fas fa-save"></i> 创建备份-->
+<!--                        </a>-->
+<!--                    </div>-->
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-warning btn-lg w-100">
+                            <i class="fas fa-sitemap"></i> 查看拓扑
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // WebSocket支持状态
+    const websocketEnabled = {{ websocket_enabled|lower }};
+    let websocket = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectInterval = 3000; // 3秒
+
+    // 页面加载完成后初始化WebSocket
+    document.addEventListener('DOMContentLoaded', function() {
+        if (websocketEnabled) {
+            initWebSocket();
+        } else {
+            updateConnectionStatus('未启用', 'bg-warning');
+        }
+    });
+
+    // 初始化WebSocket连接
+    function initWebSocket() {
+        // 更新连接状态
+        updateConnectionStatus('正在连接...', 'bg-secondary');
+        
+        // 创建WebSocket连接
+        try {
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const host = window.location.hostname || 'localhost';
+            const port = '8765'; // WebSocket服务器端口
+            
+            websocket = new WebSocket(`${protocol}${host}:${port}`);
+            
+            // 连接打开事件
+            websocket.onopen = function(event) {
+                console.log('WebSocket连接已建立');
+                updateConnectionStatus('已连接', 'bg-success');
+                reconnectAttempts = 0; // 重置重连尝试计数
+            };
+            
+            // 接收消息事件
+            websocket.onmessage = function(event) {
+                console.log('收到WebSocket消息');
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketData(data);
+                } catch (error) {
+                    console.error('解析WebSocket消息出错:', error);
+                }
+            };
+            
+            // 连接关闭事件
+            websocket.onclose = function(event) {
+                console.log('WebSocket连接已关闭');
+                updateConnectionStatus('已断开', 'bg-danger');
+                
+                // 尝试重新连接
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    updateConnectionStatus(`尝试重连(${reconnectAttempts}/${maxReconnectAttempts})...`, 'bg-warning');
+                    setTimeout(initWebSocket, reconnectInterval);
+                } else {
+                    updateConnectionStatus('重连失败，请刷新页面', 'bg-danger');
+                }
+            };
+            
+            // 连接错误事件
+            websocket.onerror = function(error) {
+                console.error('WebSocket连接错误:', error);
+                updateConnectionStatus('连接错误', 'bg-danger');
+            };
+        } catch (error) {
+            console.error('初始化WebSocket出错:', error);
+            updateConnectionStatus('初始化失败', 'bg-danger');
+        }
+    }
+
+    // 更新连接状态显示
+    function updateConnectionStatus(status, className) {
+        const statusElement = document.querySelector('#connection-status span');
+        if (statusElement) {
+            statusElement.textContent = `WebSocket: ${status}`;
+            statusElement.className = `badge ${className}`;
+        }
+    }
+
+    // 处理WebSocket数据更新
+    function handleWebSocketData(data) {
+        console.log('处理WebSocket数据', data);
+        
+        // 检查数据是否有效
+        if (!data) {
+            console.error('无效的WebSocket数据');
+            return;
+        }
+        
+        // 更新仪表盘统计数据
+        document.getElementById('device-count').textContent = data.device_count || 0;
+        document.getElementById('online-count').textContent = data.online_count || 0;
+        document.getElementById('offline-count').textContent = data.offline_count || 0;
+        document.getElementById('last-update-time').textContent = `最后更新: ${data.last_update || '未知'}`;
+        
+        // 更新设备状态表格
+        updateDeviceStatusTable(data.device_status || {});
+    }
+
+    // 更新设备状态表格
+    function updateDeviceStatusTable(deviceStatus) {
+        const tableBody = document.querySelector('#device-status-table tbody');
+        if (!tableBody) {
+            console.error('找不到设备状态表格');
+            return;
+        }
+        
+        // 清空现有表格内容
+        tableBody.innerHTML = '';
+        
+        // 检查是否有设备数据
+        if (Object.keys(deviceStatus).length === 0) {
+            const emptyRow = document.createElement('tr');
+            const emptyCell = document.createElement('td');
+            emptyCell.colSpan = 9;
+            emptyCell.textContent = '没有可用的设备数据';
+            emptyCell.className = 'text-center';
+            emptyRow.appendChild(emptyCell);
+            tableBody.appendChild(emptyRow);
+            return;
+        }
+        
+        // 逐个添加设备数据行
+        for (const [deviceId, device] of Object.entries(deviceStatus)) {
+            // 创建表行
+            const row = document.createElement('tr');
+            
+            // 设备名称
+            const nameCell = document.createElement('td');
+            nameCell.textContent = device.hostname || '未知';
+            row.appendChild(nameCell);
+            
+            // IP地址
+            const ipCell = document.createElement('td');
+            ipCell.textContent = device.ip_address || '未知';
+            row.appendChild(ipCell);
+            
+            // 网络层级
+            const layerCell = document.createElement('td');
+            let layerBadge = '';
+            if (device.network_layer === 'core') {
+                layerBadge = '<span class="badge bg-danger">核心层</span>';
+            } else if (device.network_layer === 'distribution') {
+                layerBadge = '<span class="badge bg-warning">汇聚层</span>';
+            } else if (device.network_layer === 'access') {
+                layerBadge = '<span class="badge bg-info">接入层</span>';
+            } else {
+                layerBadge = `<span class="badge bg-secondary">${device.network_layer || '未知'}</span>`;
+            }
+            layerCell.innerHTML = layerBadge;
+            row.appendChild(layerCell);
+            
+            // 设备类型
+            const typeCell = document.createElement('td');
+            typeCell.textContent = device.device_type || '未知';
+            row.appendChild(typeCell);
+            
+            // 状态
+            const statusCell = document.createElement('td');
+            if (device.status) {
+                statusCell.innerHTML = '<span class="badge bg-success">在线</span>';
+            } else {
+                statusCell.innerHTML = '<span class="badge bg-danger">离线</span>';
+            }
+            row.appendChild(statusCell);
+            
+            // CPU使用率
+            const cpuCell = document.createElement('td');
+            if (device.status) {
+                // 根据CPU使用率显示不同颜色
+                let cpuClass = 'text-success';
+                if (device.cpu_usage > 80) {
+                    cpuClass = 'text-danger';
+                } else if (device.cpu_usage > 50) {
+                    cpuClass = 'text-warning';
+                }
+                cpuCell.innerHTML = `
+                    <span class="${cpuClass}">${device.cpu_usage || 0}%</span>
+                    <div class="progress mt-1" style="height: 5px;">
+                        <div class="progress-bar bg-${cpuClass.replace('text-', '')}" 
+                             role="progressbar" 
+                             style="width: ${device.cpu_usage || 0}%" 
+                             aria-valuenow="${device.cpu_usage || 0}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100"></div>
+                    </div>
+                `;
+            } else {
+                cpuCell.innerHTML = '<span class="text-muted">--</span>';
+            }
+            row.appendChild(cpuCell);
+            
+            // 内存使用率
+            const memoryCell = document.createElement('td');
+            if (device.status) {
+                // 根据内存使用率显示不同颜色
+                let memClass = 'text-success';
+                if (device.memory_usage > 80) {
+                    memClass = 'text-danger';
+                } else if (device.memory_usage > 50) {
+                    memClass = 'text-warning';
+                }
+                memoryCell.innerHTML = `
+                    <span class="${memClass}">${device.memory_usage || 0}%</span>
+                    <div class="progress mt-1" style="height: 5px;">
+                        <div class="progress-bar bg-${memClass.replace('text-', '')}" 
+                             role="progressbar" 
+                             style="width: ${device.memory_usage || 0}%" 
+                             aria-valuenow="${device.memory_usage || 0}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100"></div>
+                    </div>
+                `;
+            } else {
+                memoryCell.innerHTML = '<span class="text-muted">--</span>';
+            }
+            row.appendChild(memoryCell);
+            
+            // 接口状态
+            const interfaceCell = document.createElement('td');
+            if (device.status) {
+                const activeInterfaces = device.active_interfaces || 0;
+                const totalInterfaces = device.total_interfaces || 0;
+                const interfacePercentage = totalInterfaces > 0 ? (activeInterfaces / totalInterfaces * 100) : 0;
+                
+                let interfaceClass = 'text-success';
+                if (interfacePercentage < 50) {
+                    interfaceClass = 'text-danger';
+                } else if (interfacePercentage < 80) {
+                    interfaceClass = 'text-warning';
+                }
+                
+                interfaceCell.innerHTML = `
+                    <span class="${interfaceClass}">${activeInterfaces}/${totalInterfaces}</span>
+                    <div class="progress mt-1" style="height: 5px;">
+                        <div class="progress-bar bg-${interfaceClass.replace('text-', '')}" 
+                             role="progressbar" 
+                             style="width: ${interfacePercentage}%" 
+                             aria-valuenow="${interfacePercentage}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100"></div>
+                    </div>
+                `;
+            } else {
+                interfaceCell.innerHTML = '<span class="text-muted">--/--</span>';
+            }
+            row.appendChild(interfaceCell);
+            
+            // 操作按钮
+            const actionCell = document.createElement('td');
+            actionCell.innerHTML = `
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary" 
+                            onclick="refreshDevice('${deviceId}', '${device.ip_address}')">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-info" 
+                            onclick="viewDeviceDetails('${deviceId}', '${device.ip_address}')">
+                        <i class="fas fa-info-circle"></i>
+                    </button>
+                </div>
+            `;
+            row.appendChild(actionCell);
+            
+            // 将行添加到表格
+            tableBody.appendChild(row);
+        }
+    }
+
+    // 刷新设备状态
+    function refreshDevice(deviceId, ipAddress) {
+        console.log(`刷新设备: ${deviceId}, IP: ${ipAddress}`);
+        // 如果WebSocket连接可用，发送刷新请求
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify({
+                type: 'start_monitoring',
+                device_ip: ipAddress
+            }));
+            alert(`已发送刷新请求，设备: ${ipAddress}`);
+        } else {
+            alert('WebSocket连接不可用，无法发送刷新请求');
+        }
+    }
+
+    // 查看设备详情
+    function viewDeviceDetails(deviceId, ipAddress) {
+        console.log(`查看设备详情: ${deviceId}, IP: ${ipAddress}`);
+        alert(`功能开发中，设备: ${ipAddress}`);
+    }
+</script>
+{% endblock %}

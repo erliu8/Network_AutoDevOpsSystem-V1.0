@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}首页 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2 text-center">
+            <h1 class="display-4 mb-4">欢迎使用校园网络自动化运维系统</h1>
+            <p class="lead mb-5">
+                本系统提供全面的校园网络监控和自动化运维工具，帮助您高效管理校园网络设备。
+            </p>
+            
+            <div class="row mt-5">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-tachometer-alt fa-3x mb-3 text-primary"></i>
+                            <h5 class="card-title">实时监控</h5>
+                            <p class="card-text">通过仪表盘实时掌握所有网络设备的状态</p>
+                            <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary mt-3">查看仪表盘</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-server fa-3x mb-3 text-success"></i>
+                            <h5 class="card-title">设备管理</h5>
+                            <p class="card-text">管理所有网络设备，包括路由器、交换机等</p>
+                            <a href="{{ url_for('devices.get_devices') }}" class="btn btn-success mt-3">设备管理</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-sitemap fa-3x mb-3 text-warning"></i>
+                            <h5 class="card-title">DHCP配置</h5>
+                            <p class="card-text">管理DHCP服务器配置并进行审批部署</p>
+                            <a href="{{ url_for('dhcp.dhcp_config_view') }}" class="btn btn-warning mt-3">配置DHCP</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-5">
+                <p>
+                    <strong>最新消息:</strong> 系统已更新DHCP配置审批功能，支持通过PyQt应用程序进行审批。
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    console.log("首页加载完成");
+    
+    // 检查静态资源是否正确加载
+    setTimeout(function() {
+        var missingResources = [];
+        
+        // 检查CSS文件
+        $('link[rel="stylesheet"]').each(function() {
+            var sheet = this.sheet;
+            if (!sheet && this.href && !this.href.startsWith('http')) {
+                missingResources.push(this.href);
+            }
+        });
+        
+        // 如果有资源加载失败，显示提示
+        if (missingResources.length > 0) {
+            console.warn("以下资源加载失败:", missingResources);
+            $('<div class="alert alert-warning mt-3">部分资源加载失败，页面可能无法正常显示。请检查网络连接或联系管理员。</div>')
+                .insertAfter('h1:first');
+        }
+    }, 1000);
+});
+</script>
+{% endblock %} 

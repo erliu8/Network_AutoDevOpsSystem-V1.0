@@ -1,0 +1,40 @@
+
+
+
+Login authentication
+
+
+Username:********
+Password:
+Info: The max number of VTY users is 5, and the number
+      of current VTY users on line is 2.
+      The current login time is 2025-05-0******** 0********:30:2********.
+<Huawei>
+<Huawei>
+<Huawei>screen-length 0 temporary
+Info: The configuration takes effect on the current user terminal interface only.
+<Huawei>
+<Huawei>screen-length 0 temporary
+Info: The configuration takes effect on the current user terminal interface only.
+<Huawei>display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.****************0 (S5700 V200R00********C00)
+Copyright (c) 2000-20**************** HUAWEI TECH CO., LTD
+
+Quidway S5700-28C-HI Routing Switch uptime is 0 week, 0 day, 7 hours, 22 minutes
+<Huawei>system-view
+Enter system view, return user view with Ctrl+Z.
+[Huawei]system-view
+        ^
+Error: Unrecognized command found at '^' position.
+[Huawei]configure terminal
+        ^
+Error: Unrecognized command found at '^' position.
+[Huawei]system-view
+        ^
+Error: Unrecognized command found at '^' position.
+[Huawei]
+[Huawei]
+[Huawei]return
+<Huawei>
+<Huawei>quit

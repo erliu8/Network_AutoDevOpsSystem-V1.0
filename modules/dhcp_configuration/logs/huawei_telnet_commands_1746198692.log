@@ -1,0 +1,136 @@
+===== 将执行以下命令 =====
+1. system-view
+2. ip pool zhougang111
+3. gateway-list 192.168.19.1
+4. network 192.168.19.0 mask 255.255.255.0
+5. dns-list 3.3.3.3.3
+6. domain-name campus.local
+7. lease day 1
+8. quit
+9. quit
+===== 命令列表结束 =====
+
+
+===== 执行日志 =====
+登录提示: 
+
+Login authentication
+
+
+Username:
+密码提示: 1
+Password:
+登录响应: 
+Info: The max number of VTY users is 5, and the number
+      of current VTY users on line is 3.
+      The current login time is 2025-05-02 23:11:28.
+<LSW1>
+命令 'system-view' 响应: system-view
+Enter system view, return user view with Ctrl+Z.
+[LSW1]
+命令 'ip pool zhougang111' 响应: ip pool zhougang111
+[LSW1-ip-pool-zhougang111]
+命令 'gateway-list 192.168.19.1' 响应: gateway-list 192.168.19.1
+Error:Part of the gateway IP has already exist.
+[LSW1-ip-pool-zhougang111]
+命令 'network 192.168.19.0 mask 255.255.255.0' 响应: network 192.168.19.0 mask 255.255.255.0
+Error:Please delete the network section first.
+[LSW1-ip-pool-zhougang111]
+命令 'dns-list 3.3.3.3.3' 响应: dns-list 3.3.3.3.3
+                                   ^
+Error: Wrong parameter found at '^' position.
+[LSW1-ip-pool-zhougang111]
+命令 'domain-name campus.local' 响应: domain-name campus.local
+[LSW1-ip-pool-zhougang111]
+命令 'lease day 1' 响应: lease day 1
+[LSW1-ip-pool-zhougang111]
+命令 'quit' 响应: quit
+[LSW1]
+命令 'quit' 响应: quit
+<LSW1>
+DHCP池信息: display ip pool 
+  -----------------------------------------------------------------------
+  Pool-name      : employee
+  Pool-No        : 0
+  Position       : Local           Status           : Unlocked
+  Gateway-0      : 10.1.51.254     
+  Mask           : 255.255.255.0
+  VPN instance   : OA
+
+  -----------------------------------------------------------------------
+  Pool-name      : employee1
+  Pool-No        : 1
+  Position       : Local           Status           : Unlocked
+  Gateway-0      : -               
+  Mask           : -
+  VPN instance   : OA
+
+  -----------------------------------------------------------------------
+  Pool-name      : employee2
+  Pool-No        : 2
+  Position       : Local           Status           : Unlocked
+  Gateway-0      : 10.1.52.254     
+  Mask           : 255.255.255.0
+  VPN instance   : OA
+
+  -----------------------------------------------------------------------
+  Pool-name      : employee3
+  Pool-No        : 3
+  Position       : Local           Status           : Unlocked
+  ---- More ----
+保存配置结果: Y
+      ^
+Error: Unrecognized command found at '^' position.
+<LSW1>
+
+===== 命令执行结果 =====
+命令 1: system-view
+输出:
+system-view
+Enter system view, return user view with Ctrl+Z.
+[LSW1]
+--------------------------------------------------
+命令 2: ip pool zhougang111
+输出:
+ip pool zhougang111
+[LSW1-ip-pool-zhougang111]
+--------------------------------------------------
+命令 3: gateway-list 192.168.19.1
+输出:
+gateway-list 192.168.19.1
+Error:Part of the gateway IP has already exist.
+[LSW1-ip-pool-zhougang111]
+--------------------------------------------------
+命令 4: network 192.168.19.0 mask 255.255.255.0
+输出:
+network 192.168.19.0 mask 255.255.255.0
+Error:Please delete the network section first.
+[LSW1-ip-pool-zhougang111]
+--------------------------------------------------
+命令 5: dns-list 3.3.3.3.3
+输出:
+dns-list 3.3.3.3.3
+                                   ^
+Error: Wrong parameter found at '^' position.
+[LSW1-ip-pool-zhougang111]
+--------------------------------------------------
+命令 6: domain-name campus.local
+输出:
+domain-name campus.local
+[LSW1-ip-pool-zhougang111]
+--------------------------------------------------
+命令 7: lease day 1
+输出:
+lease day 1
+[LSW1-ip-pool-zhougang111]
+--------------------------------------------------
+命令 8: quit
+输出:
+quit
+[LSW1]
+--------------------------------------------------
+命令 9: quit
+输出:
+quit
+<LSW1>
+--------------------------------------------------

@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}设备管理 - 校园网络自动化运维系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">设备管理</h1>
+        <a href="{{ url_for('add_device') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> 添加设备
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="fas fa-server me-1"></i>
+        设备列表
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="devicesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>设备名称</th>
+                        <th>IP地址</th>
+                        <th>设备类型</th>
+                        <th>网络层级</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in devices %}
+                    <tr>
+                        <td>{{ device.id }}</td>
+                        <td>{{ device.hostname }}</td>
+                        <td>{{ device.ip_address }}</td>
+                        <td>{{ device.device_type }}</td>
+                        <td>
+                            {% if device.network_layer == 'core' %}
+                            <span class="badge bg-danger">核心层</span>
+                            {% elif device.network_layer == 'distribution' %}
+                            <span class="badge bg-warning">汇聚层</span>
+                            {% elif device.network_layer == 'access' %}
+                            <span class="badge bg-info">接入层</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ device.network_layer }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if device.status %}
+                            <span class="badge bg-success">在线</span>
+                            {% else %}
+                            <span class="badge bg-danger">离线</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i> 查看
+                            </a>
+                            <button class="btn btn-sm btn-success refreshDevice" data-id="{{ device.id }}">
+                                <i class="fas fa-sync-alt"></i> 刷新状态
+                            </button>
+<!--                            <button class="btn btn-sm btn-info backupDevice" data-id="{{ device.id }}">-->
+<!--                                <i class="fas fa-save"></i> 备份-->
+<!--                            </button>-->
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 调试信息
+    console.log("jQuery版本:", $.fn.jquery);
+    console.log("DataTables是否存在:", typeof $.fn.DataTable !== 'undefined');
+    console.log("刷新按钮数量:", $('.refreshDevice').length);
+    console.log("备份按钮数量:", $('.backupDevice').length);
+
+    $(document).ready(function() {
+        // 初始化数据表格 - 添加错误处理
+        try {
+            if ($.fn.DataTable) {
+                $('#devicesTable').DataTable({
+                    "language": {
+                        "url": "//cdn.datatables.net/plug-ins/1.11.5/i18n/zh.json"
+                    }
+                });
+                console.log("DataTables 初始化成功");
+            } else {
+                console.error("DataTables 未加载");
+            }
+        } catch (error) {
+            console.error("DataTables 初始化错误:", error);
+        }
+
+        // 刷新设备状态 - 使用 on 方法绑定事件
+        $(document).on('click', '.refreshDevice', function() {
+            const deviceId = $(this).data('id');
+            const button = $(this);
+
+            console.log("点击刷新按钮，设备ID:", deviceId);
+
+            button.html('<i class="fas fa-spinner fa-spin"></i> 刷新中...');
+            button.prop('disabled', true);
+
+            $.ajax({
+                url: `/api/devices/${deviceId}/refresh`,
+                method: 'POST',
+                success: function(response) {
+                    console.log("刷新请求成功:", response);
+                    if (response.success) {
+                        alert('刷新成功');
+                        location.reload();
+                    } else {
+                        alert('刷新失败: ' + response.error);
+                        button.html('<i class="fas fa-sync-alt"></i> 刷新状态');
+                        button.prop('disabled', false);
+                    }
+                },
+                error: function(xhr) {
+                    console.error("刷新请求失败:", xhr);
+                    alert('发生错误: ' + (xhr.responseJSON?.error || '未知错误'));
+                    button.html('<i class="fas fa-sync-alt"></i> 刷新状态');
+                    button.prop('disabled', false);
+                }
+            });
+        });
+
+        // 备份设备配置 - 使用 on 方法绑定事件
+        $(document).on('click', '.backupDevice', function() {
+            const deviceId = $(this).data('id');
+            const button = $(this);
+
+            console.log("点击备份按钮，设备ID:", deviceId);
+
+            button.html('<i class="fas fa-spinner fa-spin"></i> 备份中...');
+            button.prop('disabled', true);
+
+            $.ajax({
+                url: `/api/backup/${deviceId}`,
+                method: 'POST',
+                success: function(response) {
+                    console.log("备份请求成功:", response);
+                    if (response.success) {
+                        alert('备份成功: ' + response.message);
+                        button.html('<i class="fas fa-save"></i> 备份');
+                        button.prop('disabled', false);
+                    } else {
+                        alert('备份失败: ' + response.error);
+                        button.html('<i class="fas fa-save"></i> 备份');
+                        button.prop('disabled', false);
+                    }
+                },
+                error: function(xhr) {
+                    console.error("备份请求失败:", xhr);
+                    alert('发生错误: ' + (xhr.responseJSON?.error || '未知错误'));
+                    button.html('<i class="fas fa-save"></i> 备份');
+                    button.prop('disabled', false);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,408 @@
+# Batch_configuration_of_addresses.py
+import sys
+import time
+import threading
+import ipaddress
+from pathlib import Path
+from PyQt5.QtCore import QObject, pyqtSignal
+
+# 添加项目根目录到系统路径
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+# 导入线程工厂
+from core.business.thread_factory import ThreadFactory
+
+class BatchConfigController(QObject):
+    # 定义信号
+    connection_result = pyqtSignal(bool, str)
+    config_result = pyqtSignal(bool, str)
+    log_message = pyqtSignal(str)
+    
+    def __init__(self):
+        super().__init__()
+        self.window = None
+        self.connection = None
+        # 获取线程工厂实例
+        self.thread_factory = ThreadFactory.get_instance()
+        
+    def show_window(self):
+        """显示配置窗口"""
+        from .gui import BatchConfigWindow
+        if not self.window:
+            self.window = BatchConfigWindow(self)
+            # 连接信号
+            self.connection_result.connect(self.window.connection_status)
+            self.config_result.connect(self.window.config_status)
+            self.log_message.connect(self.window.log)
+        
+        self.window.show()
+        
+    def test_connection(self, ip, username, password):
+        """测试与设备的连接"""
+        # 使用线程工厂创建线程
+        self.thread_factory.start_thread(
+            target=self._test_connection_thread,
+            args=(ip, username, password),
+            name=f"ConnectionTest-{ip}",
+            module="批量配置地址模块"
+        )
+        
+    def _test_connection_thread(self, ip, username, password):
+        """在线程中执行连接测试"""
+        connection = None
+        try:
+            self.log_message.emit(f"正在连接到设备 {ip}...")
+            
+            # 使用netmiko连接设备
+            from netmiko import ConnectHandler
+            
+            device = {
+                'device_type': 'huawei_telnet',
+                'ip': ip,
+                'username': username,
+                'password': password,
+                'port': 23,
+                'timeout': 15,
+            }
+            
+            connection = ConnectHandler(**device)
+            
+            # 测试发送一个简单命令
+            output = connection.send_command("display version")
+            
+            # 关闭连接
+            connection.disconnect()
+            
+            self.connection_result.emit(True, f"成功连接到设备 {ip}")
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"连接设备 {ip} 失败: {str(e)}"
+            self.log_message.emit(error_msg)
+            self.log_message.emit(traceback.format_exc())
+            self.connection_result.emit(False, error_msg)
+            
+            # 尝试关闭连接
+            try:
+                if connection:
+                    connection.disconnect()
+            except:
+                pass
+            
+    def apply_batch_config(self, ip, username, password, start_vlan, start_port, end_port, start_ip):
+        """应用批量配置"""
+        # 使用线程工厂创建线程
+        self.thread_factory.start_thread(
+            target=self._apply_batch_config_thread,
+            args=(ip, username, password, start_vlan, start_port, end_port, start_ip),
+            name=f"BatchConfig-{ip}",
+            module="批量配置地址模块"
+        )
+        
+    def _apply_batch_config_thread(self, ip, username, password, start_vlan, start_port, end_port, start_ip):
+        """在线程中执行批量配置"""
+        connection = None
+        try:
+            self.log_message.emit(f"正在连接到设备 {ip}...")
+            
+            # 使用netmiko连接设备
+            from netmiko import ConnectHandler
+            
+            # 减小超时时间，增加重试机制
+            device = {
+                'device_type': 'huawei_telnet',
+                'ip': ip,
+                'username': username,
+                'password': password,
+                'port': 23,
+                'timeout': 10,  # 缩短超时时间
+                'session_log': 'netmiko_session.log',  # 添加会话日志
+                'global_delay_factor': 2,  # 增加全局延迟因子
+            }
+            
+            self.log_message.emit(f"正在建立Telnet连接，超时设置为10秒...")
+            # 尝试连接，最多重试3次
+            max_retries = 3
+            retry_count = 0
+            connection_success = False
+            
+            while retry_count < max_retries and not connection_success:
+                try:
+                    connection = ConnectHandler(**device)
+                    connection_success = True
+                    self.log_message.emit(f"成功连接到设备 {ip}")
+                except Exception as conn_err:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        self.log_message.emit(f"连接失败 (尝试 {retry_count}/{max_retries}): {str(conn_err)}")
+                        self.log_message.emit(f"等待5秒后重试...")
+                        import time
+                        time.sleep(5)
+                    else:
+                        self.log_message.emit(f"连接失败，已达到最大重试次数: {str(conn_err)}")
+                        raise
+            
+            if not connection_success:
+                self.log_message.emit("无法连接到设备，配置中止")
+                self.config_result.emit(False, "连接设备失败")
+                return
+            
+            # 测试设备响应
+            self.log_message.emit("测试设备响应...")
+            try:
+                test_output = connection.send_command_timing("display version", delay_factor=2)
+                self.log_message.emit(f"设备响应: 收到 {len(test_output)} 字节的数据")
+            except Exception as test_err:
+                self.log_message.emit(f"设备响应测试失败: {str(test_err)}")
+                
+            # 解析端口范围
+            start_port_num = int(start_port.split('/')[-1])
+            end_port_num = int(end_port.split('/')[-1])
+            
+            # 解析起始IP和子网掩码
+            # 支持带掩码的IP，如192.168.1.1/24
+            if '/' in start_ip:
+                ip_addr, subnet_mask = start_ip.split('/')
+                subnet_mask = int(subnet_mask)
+                # 将掩码转换为点分十进制格式
+                cidr_to_netmask = {
+                    24: "255.255.255.0",
+                    25: "255.255.255.128",
+                    26: "255.255.255.192",
+                    27: "255.255.255.224",
+                    28: "255.255.255.240",
+                    29: "255.255.255.248",
+                    30: "255.255.255.252",
+                    16: "255.255.0.0",
+                    17: "255.255.128.0",
+                    18: "255.255.192.0",
+                    19: "255.255.224.0",
+                    20: "255.255.240.0",
+                    21: "255.255.248.0",
+                    22: "255.255.252.0",
+                    23: "255.255.254.0",
+                }
+                netmask = cidr_to_netmask.get(subnet_mask, "255.255.255.0")
+            else:
+                ip_addr = start_ip
+                netmask = "255.255.255.0"
+                subnet_mask = 24
+            
+            # 解析IP地址部分
+            ip_parts = ip_addr.split('.')
+            
+            # 进入系统视图
+            self.log_message.emit("进入系统视图...")
+            system_view_output = connection.send_command_timing("system-view", delay_factor=2)
+            self.log_message.emit(f"系统视图响应: {system_view_output}")
+            
+            # 配置每个端口和对应的VLAN
+            success_count = 0
+            total_ports = end_port_num - start_port_num + 1
+            self.log_message.emit(f"准备配置 {total_ports} 个端口...")
+            
+            for i in range(start_port_num, end_port_num + 1):
+                try:
+                    current_port = f"G0/0/{i}"
+                    current_vlan = start_vlan + (i - start_port_num)
+                    
+                    # 为每个接口创建不同的IP地址，以避免冲突
+                    # 如果子网掩码小于24，则为每个接口使用不同的第三个八位字节
+                    if subnet_mask < 24:
+                        # 对于更大的网络，增加第三个八位字节
+                        third_octet = int(ip_parts[2]) + (i - start_port_num)
+                        current_ip = f"{ip_parts[0]}.{ip_parts[1]}.{third_octet}.{ip_parts[3]}"
+                    else:
+                        # 对于/24及更小的网络，也增加第三个八位字节，而不是第四个
+                        # 这样第二个VLAN接口的地址就是192.168.31.2/24而不是192.168.30.3/24
+                        third_octet = int(ip_parts[2]) + (i - start_port_num)
+                        current_ip = f"{ip_parts[0]}.{ip_parts[1]}.{third_octet}.{ip_parts[3]}"
+                    
+                    self.log_message.emit(f"开始配置端口 {current_port} ({i-start_port_num+1}/{total_ports}) 和 VLAN {current_vlan}...")
+                    
+                    # 创建VLAN
+                    self.log_message.emit(f"创建VLAN {current_vlan}...")
+                    output = connection.send_command_timing(f"vlan {current_vlan}", delay_factor=2)
+                    self.log_message.emit(f"VLAN {current_vlan} 创建响应: {output[:100]}...")
+                    
+                    if "Error" in output:
+                        self.log_message.emit(f"创建VLAN {current_vlan} 失败: {output}")
+                        continue
+                    
+                    # 退出VLAN视图
+                    quit_output = connection.send_command_timing("quit", delay_factor=2)
+                    self.log_message.emit(f"退出VLAN视图响应: {quit_output[:50]}...")
+                    
+                    # 配置端口
+                    self.log_message.emit(f"配置端口 {current_port}...")
+                    interface_output = connection.send_command_timing(f"interface {current_port}", delay_factor=2)
+                    self.log_message.emit(f"进入接口 {current_port} 响应: {interface_output[:100]}...")
+                    
+                    link_type_output = connection.send_command_timing("port link-type access", delay_factor=2)
+                    self.log_message.emit(f"设置链路类型响应: {link_type_output[:100]}...")
+                    
+                    vlan_output = connection.send_command_timing(f"port default vlan {current_vlan}", delay_factor=2)
+                    self.log_message.emit(f"设置默认VLAN响应: {vlan_output[:100]}...")
+                    
+                    if "Error" in vlan_output:
+                        self.log_message.emit(f"配置端口 {current_port} 加入VLAN {current_vlan} 失败: {vlan_output}")
+                        connection.send_command_timing("quit", delay_factor=2)
+                        continue
+                    
+                    # 退出接口配置
+                    quit_interface_output = connection.send_command_timing("quit", delay_factor=2)
+                    self.log_message.emit(f"退出接口配置响应: {quit_interface_output[:50]}...")
+                    
+                    # 检查VLAN接口是否已存在
+                    self.log_message.emit(f"检查VLAN接口 Vlanif{current_vlan} 是否存在...")
+                    vlan_check_output = connection.send_command_timing(f"display interface Vlanif{current_vlan}", delay_factor=2)
+                    self.log_message.emit(f"VLAN接口检查响应: {vlan_check_output[:100]}...")
+                    
+                    # 配置VLAN接口
+                    self.log_message.emit(f"配置VLAN接口 Vlanif{current_vlan} 的IP地址为 {current_ip}/{subnet_mask}...")
+                    vlanif_output = connection.send_command_timing(f"interface Vlanif{current_vlan}", delay_factor=2)
+                    self.log_message.emit(f"进入VLAN接口响应: {vlanif_output[:100]}...")
+                    
+                    # 检查接口是否已有配置
+                    if "Error" in vlan_check_output:
+                        # 新接口，直接配置
+                        self.log_message.emit(f"VLAN接口 Vlanif{current_vlan} 不存在，直接配置IP...")
+                        ip_output = connection.send_command_timing(f"ip address {current_ip} {netmask}", delay_factor=2)
+                        self.log_message.emit(f"配置IP地址响应: {ip_output[:100]}...")
+                    else:
+                        # 接口存在，先尝试查询现有IP
+                        self.log_message.emit(f"VLAN接口 Vlanif{current_vlan} 已存在，查询当前配置...")
+                        current_config = connection.send_command_timing("display this", delay_factor=2)
+                        self.log_message.emit(f"当前配置长度: {len(current_config)} 字节")
+                        
+                        if "ip address" in current_config:
+                            # 先取消现有配置
+                            self.log_message.emit(f"取消现有IP地址配置...")
+                            undo_output = connection.send_command_timing("undo ip address", delay_factor=2)
+                            self.log_message.emit(f"取消IP地址响应: {undo_output[:100]}...")
+                        
+                        # 配置新IP
+                        self.log_message.emit(f"配置新IP地址: {current_ip} {netmask}...")
+                        ip_output = connection.send_command_timing(f"ip address {current_ip} {netmask}", delay_factor=2)
+                        self.log_message.emit(f"配置IP地址响应: {ip_output[:100]}...")
+                    
+                    if "Error" in ip_output:
+                        self.log_message.emit(f"配置VLAN接口 Vlanif{current_vlan} 的IP地址失败: {ip_output}")
+                        connection.send_command_timing("quit", delay_factor=2)
+                        continue
+                    
+                    # 退出接口配置
+                    quit_vlanif_output = connection.send_command_timing("quit", delay_factor=2)
+                    self.log_message.emit(f"退出VLAN接口配置响应: {quit_vlanif_output[:50]}...")
+                    
+                    self.log_message.emit(f"端口 {current_port} 和 VLAN {current_vlan} 配置完成")
+                    success_count += 1
+                    
+                except Exception as loop_err:
+                    import traceback
+                    self.log_message.emit(f"配置端口 G0/0/{i} 时发生错误: {str(loop_err)}")
+                    self.log_message.emit(traceback.format_exc())
+                    # 继续下一个端口
+                    continue
+            
+            # 保存配置
+            try:
+                self.log_message.emit("正在保存配置...")
+                quit_systerm_output = connection.send_command_timing("quit", delay_factor=2)  # 退出系统视图
+                self.log_message.emit(f"退出系统视图响应: {quit_systerm_output[:50]}...")
+                
+                save_output = connection.send_command_timing("save", delay_factor=2)
+                self.log_message.emit(f"保存配置响应: {save_output[:100]}...")
+                
+                confirm_output = connection.send_command_timing("y", delay_factor=2)
+                self.log_message.emit(f"确认保存响应: {confirm_output[:100]}...")
+                
+                # 关闭连接
+                self.log_message.emit("关闭连接...")
+                connection.disconnect()
+                
+                self.config_result.emit(True, f"成功完成批量配置，共配置了 {success_count}/{total_ports} 个端口")
+            except Exception as save_err:
+                self.log_message.emit(f"保存配置时发生错误: {str(save_err)}")
+                # 尝试关闭连接
+                try:
+                    connection.disconnect()
+                except:
+                    pass
+                self.config_result.emit(True, f"配置已完成但保存失败，共配置了 {success_count}/{total_ports} 个端口")
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"配置失败: {str(e)}"
+            self.log_message.emit(error_msg)
+            self.log_message.emit(traceback.format_exc())
+            
+            # 提供诊断信息
+            self.log_message.emit("--- 诊断信息 ---")
+            # 检查是否是超时类型的错误
+            if "timed out" in str(e).lower() or "timeout" in str(e).lower():
+                self.log_message.emit("检测到超时错误，可能是设备响应过慢或网络连接不稳定")
+                self.log_message.emit("建议检查：")
+                self.log_message.emit("1. 设备是否在线且可访问")
+                self.log_message.emit("2. Telnet是否已在设备上启用")
+                self.log_message.emit("3. 用户名和密码是否正确")
+                self.log_message.emit("4. 网络连接是否稳定")
+            elif "authentication" in str(e).lower() or "login" in str(e).lower():
+                self.log_message.emit("检测到认证错误，可能是用户名或密码错误")
+                self.log_message.emit("建议检查：")
+                self.log_message.emit("1. 用户名和密码是否正确")
+                self.log_message.emit("2. 用户是否有权限执行配置命令")
+            elif "refused" in str(e).lower() or "connect" in str(e).lower():
+                self.log_message.emit("检测到连接错误，可能是设备无法访问或Telnet服务未开启")
+                self.log_message.emit("建议检查：")
+                self.log_message.emit("1. 设备IP地址是否正确")
+                self.log_message.emit("2. 设备是否在线")
+                self.log_message.emit("3. Telnet服务是否已开启")
+                self.log_message.emit("4. 是否有防火墙阻止连接")
+            else:
+                self.log_message.emit("未知类型的错误，请检查详细错误信息")
+                
+            self.log_message.emit("--- 调试选项 ---")
+            self.log_message.emit("1. 尝试调整超时参数")
+            self.log_message.emit("2. 检查设备状态及配置")
+            self.log_message.emit("3. 查看netmiko_session.log文件获取详细日志")
+            self.log_message.emit("--- 诊断结束 ---")
+            
+            self.config_result.emit(False, error_msg)
+            
+            # 尝试关闭连接
+            try:
+                if connection:
+                    self.log_message.emit("正在断开连接...")
+                    connection.disconnect()
+                    self.log_message.emit("连接已断开")
+            except Exception as close_err:
+                self.log_message.emit(f"断开连接时出错: {str(close_err)}")
+
+# 重构MainAppController，避免循环导入问题
+class MainAppController:
+    """批量配置地址模块的主控制器类"""
+    def __init__(self):
+        self.controller = BatchConfigController()
+        self._window = None
+        
+    @property
+    def window(self):
+        """延迟加载窗口，避免循环导入"""
+        if self._window is None:
+            try:
+                from .gui import BatchConfigWindow
+                self._window = BatchConfigWindow(self.controller)
+            except Exception as e:
+                import traceback
+                print(f"加载批量配置地址窗口失败: {str(e)}")
+                traceback.print_exc()
+                # 创建一个空窗口作为后备
+                from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+                widget = QWidget()
+                layout = QVBoxLayout(widget)
+                label = QLabel("批量配置地址模块加载失败，请检查日志")
+                label.setStyleSheet("color: red; font-size: 14px;")
+                layout.addWidget(label)
+                self._window = widget
+        return self._window
