@@ -26,10 +26,7 @@ class DeviceService:
             cursor.execute("SELECT * FROM devices")
             devices = cursor.fetchall()
             
-            # 处理结果，去除重复设备
             result = []
-            seen_types = set()  # 用于跟踪已经处理过的特殊设备类型
-            
             for device in devices:
                 device_dict = {
                     "id": device['id'],
@@ -42,19 +39,6 @@ class DeviceService:
                     "description": device['description'],
                     "network_level": DeviceService.get_device_network_level(device['device_type'])
                 }
-                
-                # 处理特殊设备
-                device_type = device_dict["type"]
-                if "地域1核心交换机" in device_type or \
-                   "地域1出口路由器" in device_type or \
-                   "地域2出口路由器" in device_type:
-                    # 如果是特殊设备，检查是否已经添加过
-                    if device_type in seen_types:
-                        continue  # 跳过重复的特殊设备
-                    seen_types.add(device_type)
-                    # 确保特殊设备的企业为企业A
-                    device_dict["enterprise"] = "企业A"
-                
                 result.append(device_dict)
             
             cursor.close()
@@ -103,16 +87,10 @@ class DeviceService:
                 device_type = device.get("type", "")
                 enterprise = device.get("enterprise", "")
                 
-                # 处理特殊设备
-                if "地域1核心交换机" in device_type or "地域1出口路由器" in device_type or "地域2出口路由器" in device_type:
-                    # 如果企业字段为空，默认设置为企业A
-                    if not enterprise:
-                        enterprise = "企业A"
-                
-                if device_type not in result:
-                    result[device_type] = {}
-                
-                result[device_type][enterprise] = device.get("ip", "")
+                if device_type and enterprise:  # 只处理有效的设备数据
+                    if device_type not in result:
+                        result[device_type] = {}
+                    result[device_type][enterprise] = device.get("ip", "")
             
             return result
         except Exception as e:
